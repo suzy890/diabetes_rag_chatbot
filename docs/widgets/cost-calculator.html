@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API 비용 계산기</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#ffffff; --ink:#1b2430; --soft:#55606d; --faint:#8b95a1;
+    --line:#e2e6ea; --accent:#1f6f78; --accent-bg:#e4f0f0; --warn:#8a5a12; --warn-bg:#f7edda;
+    --field:#fbfcfd; --shadow:0 1px 2px rgba(20,30,45,.06);
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#10161d; --card:#182029; --ink:#e8ecf0; --soft:#aab4c0; --faint:#7c8896;
+      --line:#28323d; --accent:#4fb6bf; --accent-bg:#15303220; --warn:#d8a55a; --warn-bg:#2a220f;
+      --field:#111820; --shadow:none;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    font-family:"Pretendard",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Segoe UI",system-ui,sans-serif;
+    background:var(--bg); color:var(--ink); line-height:1.5; padding:18px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .app{max-width:760px;margin:0 auto}
+  .kicker{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:6px}
+  h1{font-size:19px;font-weight:800;margin:0 0 4px;letter-spacing:-.01em}
+  .sub{font-size:12.5px;color:var(--soft);margin:0 0 14px}
+  .warn{font-size:12px;color:var(--warn);background:var(--warn-bg);border-radius:9px;padding:9px 12px;margin-bottom:16px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media (max-width:620px){.grid{grid-template-columns:1fr}}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:15px;box-shadow:var(--shadow)}
+  .panel h2{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin:0 0 12px}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+  .row:last-child{margin-bottom:0}
+  label{font-size:13px;color:var(--soft);flex:1}
+  input{width:104px;font:inherit;font-size:13px;text-align:right;color:var(--ink);
+    background:var(--field);border:1px solid var(--line);border-radius:8px;padding:6px 9px;
+    font-variant-numeric:tabular-nums}
+  input:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)}
+  .unit{font-size:11px;color:var(--faint);min-width:64px;text-align:left}
+  .out{margin-top:16px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;box-shadow:var(--shadow)}
+  .oline{display:flex;justify-content:space-between;align-items:baseline;padding:7px 0;border-bottom:1px dashed var(--line);font-size:13.5px}
+  .oline:last-of-type{border-bottom:0}
+  .oline .k{color:var(--soft)}
+  .oline .v{font-variant-numeric:tabular-nums;font-weight:600}
+  .total{margin-top:10px;padding-top:12px;border-top:2px solid var(--accent);display:flex;justify-content:space-between;align-items:baseline}
+  .total .k{font-weight:700;font-size:14px}
+  .total .v{font-size:20px;font-weight:800;color:var(--accent);font-variant-numeric:tabular-nums}
+  .krw{font-size:13px;color:var(--soft);text-align:right;margin-top:4px;font-variant-numeric:tabular-nums}
+  .foot{font-size:11.5px;color:var(--faint);margin-top:12px;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="kicker">COST PLAN · 미리보기 도구</div>
+  <h1>API 비용 계산기</h1>
+  <p class="sub">참여자 규모와 사용량을 넣으면 예상 API 비용이 자동 계산됩니다. 설계문서의 비용 추정식 기반.</p>
+  <div class="warn">⚠️ 단가는 <b>임시 예시값</b>입니다. 사용할 LLM·임베딩 모델과 실제 단가가 정해지면(Day 5 COST_PLAN) 값을 바꿔 정확히 산정합니다.</div>
+
+  <div class="grid">
+    <div class="panel">
+      <h2>연구 규모</h2>
+      <div class="row"><label>참여자 수</label><input id="np" type="number" min="0" value="20"><span class="unit">명</span></div>
+      <div class="row"><label>연구 기간</label><input id="days" type="number" min="0" value="84"><span class="unit">일</span></div>
+      <div class="row"><label>1일 질문 수 (1인)</label><input id="qpd" type="number" min="0" step="0.1" value="3"><span class="unit">건/일</span></div>
+      <div class="row"><label>환율</label><input id="fx" type="number" min="0" value="1400"><span class="unit">₩ / $</span></div>
+    </div>
+    <div class="panel">
+      <h2>토큰 · 단가 (예시)</h2>
+      <div class="row"><label>입력 토큰 / 질문</label><input id="tin" type="number" min="0" value="1500"><span class="unit">토큰</span></div>
+      <div class="row"><label>출력 토큰 / 답변</label><input id="tout" type="number" min="0" value="400"><span class="unit">토큰</span></div>
+      <div class="row"><label>LLM 입력 단가</label><input id="pin" type="number" min="0" step="0.01" value="3.00"><span class="unit">$ /1M</span></div>
+      <div class="row"><label>LLM 출력 단가</label><input id="pout" type="number" min="0" step="0.01" value="15.00"><span class="unit">$ /1M</span></div>
+      <div class="row"><label>임베딩 단가</label><input id="pemb" type="number" min="0" step="0.01" value="0.13"><span class="unit">$ /1M</span></div>
+      <div class="row"><label>문서 임베딩 총 토큰 (1회성)</label><input id="doctok" type="number" min="0" value="500000"><span class="unit">토큰</span></div>
+    </div>
+  </div>
+
+  <div class="out">
+    <div class="oline"><span class="k">총 질문 수</span><span class="v" id="oq">–</span></div>
+    <div class="oline"><span class="k">LLM 입력 비용</span><span class="v" id="oin">–</span></div>
+    <div class="oline"><span class="k">LLM 출력 비용</span><span class="v" id="oout">–</span></div>
+    <div class="oline"><span class="k">질문 임베딩 비용</span><span class="v" id="oqemb">–</span></div>
+    <div class="oline"><span class="k">문서 임베딩 비용 (1회성)</span><span class="v" id="odemb">–</span></div>
+    <div class="total"><span class="k">예상 총 비용 (USD)</span><span class="v" id="otot">–</span></div>
+    <div class="krw" id="okrw">–</div>
+  </div>
+  <p class="foot">
+    · 반복 비용 = LLM 입력 + LLM 출력 + 질문 임베딩 &nbsp;/&nbsp; 총 비용 = 반복 비용 + 문서 임베딩(1회성)<br>
+    · 넛지는 승인 템플릿을 우선 사용하므로 넛지 문장화 LLM 비용은 여기서 제외(보수적). 실제 호출 시 model_calls에 별도 기록.
+  </p>
+</div>
+<script>
+  var ids=["np","days","qpd","fx","tin","tout","pin","pout","pemb","doctok"];
+  function n(id){var v=parseFloat(document.getElementById(id).value);return isFinite(v)?v:0}
+  function usd(x){return "$"+x.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}
+  function calc(){
+    var totalQ=n("np")*n("days")*n("qpd");
+    var inCost=totalQ*n("tin")*n("pin")/1e6;
+    var outCost=totalQ*n("tout")*n("pout")/1e6;
+    var qEmb=totalQ*30*n("pemb")/1e6;          /* 질문 임베딩: 평균 30토큰 가정 */
+    var dEmb=n("doctok")*n("pemb")/1e6;
+    var total=inCost+outCost+qEmb+dEmb;
+    document.getElementById("oq").textContent=Math.round(totalQ).toLocaleString("ko-KR")+" 건";
+    document.getElementById("oin").textContent=usd(inCost);
+    document.getElementById("oout").textContent=usd(outCost);
+    document.getElementById("oqemb").textContent=usd(qEmb);
+    document.getElementById("odemb").textContent=usd(dEmb);
+    document.getElementById("otot").textContent=usd(total);
+    document.getElementById("okrw").textContent="≈ ₩"+Math.round(total*n("fx")).toLocaleString("ko-KR");
+  }
+  ids.forEach(function(id){document.getElementById(id).addEventListener("input",calc)});
+  calc();
+</script>
+</body>
+</html>

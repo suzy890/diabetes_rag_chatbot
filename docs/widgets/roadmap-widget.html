@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>개발 로드맵</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#ffffff; --ink:#1b2430; --soft:#55606d; --faint:#8b95a1;
+    --line:#e2e6ea; --accent:#1f6f78; --accent-bg:#e4f0f0; --done:#2f7d4f;
+    --shadow:0 1px 2px rgba(20,30,45,.06);
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#10161d; --card:#182029; --ink:#e8ecf0; --soft:#aab4c0; --faint:#7c8896;
+      --line:#28323d; --accent:#4fb6bf; --accent-bg:#15303220; --done:#5aa877;
+      --shadow:none;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    font-family:"Pretendard",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Segoe UI",system-ui,sans-serif;
+    background:var(--bg); color:var(--ink); line-height:1.55;
+    padding:18px; -webkit-font-smoothing:antialiased;
+  }
+  .app{max-width:720px;margin:0 auto}
+  .head{margin-bottom:14px}
+  .kicker{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:6px}
+  h1{font-size:19px;font-weight:800;margin:0 0 10px;letter-spacing:-.01em}
+  .bar{height:8px;border-radius:99px;background:var(--line);overflow:hidden}
+  .bar>span{display:block;height:100%;width:8.3%;background:var(--accent);border-radius:99px}
+  .barnote{font-size:12.5px;color:var(--soft);margin-top:7px}
+  .barnote b{color:var(--ink)}
+  ul{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+  .phase{background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
+  .phase.cur{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+  .ph-btn{width:100%;text-align:left;background:none;border:0;cursor:pointer;color:inherit;
+    display:flex;align-items:center;gap:12px;padding:13px 15px;font:inherit}
+  .ph-btn:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+  .num{font-variant-numeric:tabular-nums;font-weight:800;font-size:13px;color:var(--faint);min-width:54px}
+  .cur .num{color:var(--accent)}
+  .ph-title{flex:1;font-weight:700;font-size:14.5px}
+  .pill{font-size:10.5px;font-weight:700;letter-spacing:.04em;padding:3px 9px;border-radius:99px;white-space:nowrap}
+  .pill.now{color:var(--accent);background:var(--accent-bg)}
+  .pill.next{color:var(--faint);background:var(--line)}
+  .chev{color:var(--faint);font-size:12px;transition:transform .18s ease;min-width:14px;text-align:center}
+  .phase.open .chev{transform:rotate(90deg)}
+  .body{display:none;padding:0 15px 14px 69px}
+  .phase.open .body{display:block}
+  .body p{margin:0 0 9px;font-size:12.5px;color:var(--soft)}
+  .tasks{display:flex;flex-direction:column;gap:5px}
+  .task{font-size:13px;color:var(--soft);padding-left:16px;position:relative}
+  .task::before{content:"";position:absolute;left:2px;top:8px;width:5px;height:5px;border-radius:50%;background:var(--accent);opacity:.6}
+  @media (prefers-reduced-motion:reduce){.chev{transition:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="head">
+    <div class="kicker">7–8월 개발 로드맵</div>
+    <h1>지금 우리는 어디쯤인가</h1>
+    <div class="bar"><span></span></div>
+    <div class="barnote"><b>Phase 0 / 6</b> · 설계·규칙 고정 진행 중 — 각 단계를 눌러 할 일을 펼쳐보세요</div>
+  </div>
+  <ul id="list"></ul>
+</div>
+<script>
+  var PHASES=[
+    {n:"Phase 0",t:"설계·규칙 고정",s:"now",sl:"이번 주 · 진행중",
+     d:"기능 구현 전, 프로젝트 구조를 개발용 문서·규칙으로 못 박는 단계.",
+     tasks:["PRD·CLAUDE.md 작성","데이터 스키마 확정(13개 테이블)","이벤트 사전 확정(13개 이벤트)","넛지·RAG·안전 규칙 확정"]},
+    {n:"Phase 1",t:"웹앱·DB 골격",s:"next",sl:"예정",
+     d:"하나의 사용자 흐름이 돌아가는 최소 뼈대.",
+     tasks:["참여자 코드 입력·확인","세션 생성·접속 이벤트 저장","기본 채팅 화면","접속 시간대 넛지 1종","Supabase 연결"]},
+    {n:"Phase 2",t:"최소 RAG",s:"next",sl:"예정",
+     d:"승인 문서에서 근거를 찾아 답하고 출처를 보여주는 한 줄기.",
+     tasks:["승인 문서 청킹·임베딩","벡터 검색","근거 기반 답변 생성","출처 표시","검색·답변·비용 로그 저장"]},
+    {n:"Phase 3",t:"넛지·종단 추적",s:"next",sl:"예정",
+     d:"행동 의도와 실제 수행을 나눠 시간순으로 추적.",
+     tasks:["식사·운동 넛지 추가","행동 약속 저장","다음 접속 시 수행 여부 확인","참여자별 종단 이벤트 생성"]},
+    {n:"Phase 4",t:"통합·테스트·현장 파일럿",s:"next",sl:"예정",
+     d:"안전·오류·데이터 누락을 점검하고 소수 사용자로 관찰.",
+     tasks:["위험 질문 처리 테스트","검색 실패·중복 저장 테스트","모바일 화면 점검","데이터 CSV 추출","소수 사용자 관찰"]},
+    {n:"Phase 5",t:"향후 서비스 확장",s:"out",sl:"범위 밖",
+     d:"MVP 이후로 미룬 확장 기능들.",
+     tasks:["예약 넛지·외부 알림(문자·카카오·푸시)","날씨 기반 넛지","회원 계정·기관 권한","장기 개인화·보안 강화"]}
+  ];
+  var list=document.getElementById("list");
+  PHASES.forEach(function(p,i){
+    var li=document.createElement("li");
+    li.className="phase"+(p.s==="now"?" cur open":"");
+    var pill=p.s==="now"?"now":"next";
+    li.innerHTML=
+      '<button class="ph-btn" aria-expanded="'+(p.s==="now")+'">'+
+        '<span class="num">'+p.n.replace("Phase ","P")+'</span>'+
+        '<span class="ph-title">'+p.t+'</span>'+
+        '<span class="pill '+pill+'">'+p.sl+'</span>'+
+        '<span class="chev">&#9654;</span>'+
+      '</button>'+
+      '<div class="body"><p>'+p.d+'</p><div class="tasks">'+
+        p.tasks.map(function(t){return '<div class="task">'+t+'</div>'}).join("")+
+      '</div></div>';
+    var btn=li.querySelector(".ph-btn");
+    btn.addEventListener("click",function(){
+      var open=li.classList.toggle("open");
+      btn.setAttribute("aria-expanded",open);
+    });
+    list.appendChild(li);
+  });
+</script>
+</body>
+</html>
