@@ -1,1 +1,1 @@
-# diabate_rag_chatbot
+# diabates_rag_chatbot
