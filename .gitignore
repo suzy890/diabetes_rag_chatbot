@@ -1,0 +1,50 @@
+# ── 비밀정보 · 환경설정 (절대 커밋 금지) ─────────────────────
+# API 키, Supabase 접속정보 등은 코드/저장소에 올리지 않는다 (CLAUDE.md 규칙)
+.env
+.env.*
+!.env.example
+secrets.toml
+.streamlit/secrets.toml
+*.key
+*.pem
+
+# ── Python ──────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# 가상환경
+.venv/
+venv/
+env/
+ENV/
+
+# ── 테스트 · 캐시 ───────────────────────────────────────
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ── 연구 데이터 · 추출물 (개인정보 포함 가능 → 커밋 금지) ─────
+# 참여자 데이터, CSV 추출물, 신원 연결표는 저장소에 올리지 않는다
+data/
+exports/
+*.csv
+*.sqlite
+*.db
+
+# ── 편집기 · OS ─────────────────────────────────────────
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ── Jupyter ─────────────────────────────────────────────
+.ipynb_checkpoints/
