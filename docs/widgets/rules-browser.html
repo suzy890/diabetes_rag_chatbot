@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>개발 규칙 브라우저</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#ffffff; --ink:#1b2430; --soft:#55606d; --faint:#8b95a1;
+    --line:#e2e6ea; --accent:#1f6f78; --accent-bg:#e4f0f0;
+    --red:#b4453b; --amber:#8a5a12; --green:#2f7d4f; --blue:#2a5f8a;
+    --shadow:0 1px 2px rgba(20,30,45,.06);
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#10161d; --card:#182029; --ink:#e8ecf0; --soft:#aab4c0; --faint:#7c8896;
+      --line:#28323d; --accent:#4fb6bf; --accent-bg:#15303220;
+      --red:#d9756b; --amber:#d8a55a; --green:#5aa877; --blue:#6fa8d6;
+      --shadow:none;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    font-family:"Pretendard",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Segoe UI",system-ui,sans-serif;
+    background:var(--bg); color:var(--ink); line-height:1.55; padding:18px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .app{max-width:720px;margin:0 auto}
+  .kicker{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:6px}
+  h1{font-size:19px;font-weight:800;margin:0 0 4px;letter-spacing:-.01em}
+  .sub{font-size:12.5px;color:var(--soft);margin:0 0 14px}
+  .tabs{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px}
+  .tab{font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;color:var(--soft);
+    background:var(--card);border:1px solid var(--line);border-radius:99px;padding:7px 13px;
+    display:flex;align-items:center;gap:6px;transition:all .15s ease}
+  .tab:hover{border-color:var(--faint)}
+  .tab[aria-selected="true"]{color:#fff;border-color:transparent}
+  .tab.t-red[aria-selected="true"]{background:var(--red)}
+  .tab.t-amber[aria-selected="true"]{background:var(--amber)}
+  .tab.t-green[aria-selected="true"]{background:var(--green)}
+  .tab.t-blue[aria-selected="true"]{background:var(--blue)}
+  .tab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;box-shadow:var(--shadow)}
+  .panel .desc{font-size:12.5px;color:var(--faint);margin:0 0 12px}
+  ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px}
+  li{font-size:13.5px;color:var(--ink);padding-left:24px;position:relative;line-height:1.5}
+  li .mk{position:absolute;left:0;top:0;font-weight:800;font-size:13px}
+  .t-red .mk{color:var(--red)} .t-amber .mk{color:var(--amber)}
+  .t-green .mk{color:var(--green)} .t-blue .mk{color:var(--blue)}
+  li small{display:block;color:var(--soft);font-size:12px;margin-top:1px}
+  @media (prefers-reduced-motion:reduce){.tab{transition:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="kicker">CLAUDE.md · 개발 규칙</div>
+  <h1>AI 코딩 에이전트의 가드레일</h1>
+  <p class="sub">이 규칙들이 AI가 프로젝트 범위·구조·안전을 임의로 벗어나지 않게 막아줍니다. 탭을 눌러 살펴보세요.</p>
+  <div class="tabs" id="tabs" role="tablist"></div>
+  <div class="panel" id="panel"></div>
+</div>
+<script>
+  var CATS=[
+    {key:"red",cls:"t-red",icon:"🚫",label:"절대 안 하는 것",mark:"✕",
+     desc:"환자 안전과 연구 무결성을 위해 넘지 않는 선.",
+     items:[
+      ["진단·처방·복약 변경을 직접 지시하지 않음","개인 맞춤 의료 판단 대신 일반 정보 + 전문가 상담 권고"],
+      ["근거가 부족하면 추측해서 답하지 않음","'근거를 찾지 못했다'고 안내하고 보류"],
+      ["요청하지 않은 기능을 임의로 추가하지 않음","범위 밖 아이디어는 제안만, 승인 후 진행"],
+      ["실험군·대조군 배정 기능을 만들지 않음","단일군 현장 실증 설계"],
+      ["실패를 성공이라 보고하지 않음","오류·미완료는 있는 그대로 알림"],
+      ["API 키·개인정보를 코드/저장소에 올리지 않음","실명·전화·주소·환자번호는 외부 API 전송 금지"]
+     ]},
+    {key:"amber",cls:"t-amber",icon:"✋",label:"승인 필요",mark:"!",
+     desc:"되돌리기 어렵거나 위험한 작업은 실행 전 반드시 연구자 승인.",
+     items:[
+      ["파일 삭제","지우기 전 확인"],
+      ["데이터베이스 스키마 변경","테이블·필드 구조를 바꾸기 전 확인"],
+      ["배포","외부에 올리기 전 확인"],
+      ["프로젝트 범위·구조·규칙 변경","PRD/규칙 문서를 먼저 갱신하고 확인"]
+     ]},
+    {key:"green",cls:"t-green",icon:"✅",label:"항상 지키는 것",mark:"✓",
+     desc:"매 작업마다 습관처럼 지키는 기본기.",
+     items:[
+      ["한 번에 하나의 작은 작업만 수행","큰 요청은 작은 단위로 분해"],
+      ["모든 연구 이벤트에 참여자 ID·시각·시스템 버전 기록","종단 분석과 재현성의 기반"],
+      ["수정 후 테스트 실행, 바꾼 파일·결과 보고","무엇을 어떻게 바꿨는지 투명하게"],
+      ["연구 데이터는 Supabase에 영구 저장","화면 임시 상태와 분리, 새로고침 후 DB에서 복원"],
+      ["중복 저장 방지","Streamlit 재실행으로 같은 기록이 두 번 남지 않게"]
+     ]},
+    {key:"blue",cls:"t-blue",icon:"🧱",label:"기술 고정",mark:"◆",
+     desc:"초기 버전의 단순함을 지키는 기술 선택.",
+     items:[
+      ["Python · Streamlit · Supabase(PostgreSQL) · pgvector · 외부 LLM/임베딩 API",""],
+      ["LangChain 등 대형 프레임워크 초기 미도입","어떤 코드가 무슨 일을 하는지 명확히"],
+      ["마이크로서비스가 아닌 모듈형 단일 애플리케이션",""],
+      ["핵심 실행 Python 코드 500줄 이내","app·rag·nudge·database·safety·config 6개 모듈"],
+      ["UI에서 LLM·벡터DB를 직접 호출하지 않음","항상 담당 모듈을 거침"]
+     ]}
+  ];
+  var tabsEl=document.getElementById("tabs"), panelEl=document.getElementById("panel");
+  function render(i){
+    var c=CATS[i];
+    Array.prototype.forEach.call(tabsEl.children,function(b,j){b.setAttribute("aria-selected",j===i)});
+    panelEl.className="panel "+c.cls;
+    panelEl.innerHTML='<p class="desc">'+c.desc+'</p><ul>'+
+      c.items.map(function(it){
+        return '<li><span class="mk">'+c.mark+'</span>'+it[0]+(it[1]?'<small>'+it[1]+'</small>':'')+'</li>';
+      }).join("")+'</ul>';
+  }
+  CATS.forEach(function(c,i){
+    var b=document.createElement("button");
+    b.className="tab "+c.cls; b.setAttribute("role","tab");
+    b.innerHTML='<span>'+c.icon+'</span>'+c.label;
+    b.addEventListener("click",function(){render(i)});
+    tabsEl.appendChild(b);
+  });
+  render(0);
+</script>
+</body>
+</html>
