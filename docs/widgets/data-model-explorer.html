@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>데이터 모델 탐색기</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#ffffff; --ink:#1b2430; --soft:#55606d; --faint:#8b95a1;
+    --line:#e2e6ea; --accent:#1f6f78; --accent-bg:#e4f0f0;
+    --c-core:#1f6f78; --c-talk:#3a6ea5; --c-nudge:#b9701f; --c-rag:#2f7d4f; --c-meas:#7a5aa8; --c-ops:#b4453b;
+    --shadow:0 1px 2px rgba(20,30,45,.06);
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#10161d; --card:#182029; --ink:#e8ecf0; --soft:#aab4c0; --faint:#7c8896;
+      --line:#28323d; --accent:#4fb6bf; --accent-bg:#15303220;
+      --c-core:#4fb6bf; --c-talk:#6fa8d6; --c-nudge:#d59a51; --c-rag:#5aa877; --c-meas:#a98fd0; --c-ops:#d9756b;
+      --shadow:none;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    font-family:"Pretendard",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Segoe UI",system-ui,sans-serif;
+    background:var(--bg); color:var(--ink); line-height:1.5; padding:18px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .app{max-width:820px;margin:0 auto}
+  .kicker{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:6px}
+  h1{font-size:19px;font-weight:800;margin:0 0 4px;letter-spacing:-.01em}
+  .sub{font-size:12.5px;color:var(--soft);margin:0 0 14px}
+  .layout{display:grid;grid-template-columns:280px 1fr;gap:16px}
+  @media (max-width:640px){.layout{grid-template-columns:1fr}}
+  .groups{display:flex;flex-direction:column;gap:12px}
+  .group h2{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin:0 0 7px}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;color:var(--ink);
+    background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 10px;
+    display:flex;align-items:center;gap:7px;transition:border-color .15s}
+  .chip:hover{border-color:var(--faint)}
+  .chip[aria-pressed="true"]{border-color:currentColor;background:var(--accent-bg)}
+  .chip .dot{width:8px;height:8px;border-radius:50%;flex:none}
+  .chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .detail{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;box-shadow:var(--shadow);align-self:start}
+  .detail .badge{font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+    padding:3px 9px;border-radius:99px;color:#fff;display:inline-block;margin-bottom:10px}
+  .detail h3{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:16px;font-weight:700;margin:0 0 6px}
+  .detail .purpose{font-size:13px;color:var(--soft);margin:0 0 14px}
+  .lbl{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin:14px 0 7px}
+  .fields{display:flex;flex-direction:column;gap:6px}
+  .field{display:flex;gap:9px;font-size:12.5px;align-items:baseline}
+  .field code{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12px;color:var(--ink);font-weight:600;min-width:112px}
+  .field .fk{font-size:9.5px;font-weight:700;color:var(--faint);border:1px solid var(--line);border-radius:4px;padding:0 4px;margin-left:2px}
+  .field span.fd{color:var(--soft)}
+  .links{display:flex;flex-direction:column;gap:5px;font-size:12.5px;color:var(--soft)}
+  .links b{color:var(--ink);font-weight:600}
+  @media (prefers-reduced-motion:reduce){.chip{transition:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="kicker">DATA_SCHEMA · 13개 테이블</div>
+  <h1>연구 데이터 모델 탐색기</h1>
+  <p class="sub">테이블을 클릭하면 목적·핵심 필드·연결관계가 보입니다. 색은 데이터 영역을 뜻합니다.</p>
+  <div class="layout">
+    <div class="groups" id="groups"></div>
+    <div class="detail" id="detail"></div>
+  </div>
+</div>
+<script>
+  var GROUPS=[
+    {name:"참여자 · 세션",color:"var(--c-core)",tables:["participants","sessions"]},
+    {name:"대화 · 이벤트",color:"var(--c-talk)",tables:["messages","events"]},
+    {name:"넛지 · 행동",color:"var(--c-nudge)",tables:["nudge_events","action_followups"]},
+    {name:"RAG · 문서",color:"var(--c-rag)",tables:["documents","document_chunks","retrieval_logs"]},
+    {name:"측정",color:"var(--c-meas)",tables:["measurements"]},
+    {name:"운영 · 버전",color:"var(--c-ops)",tables:["model_calls","system_versions","technical_errors"]}
+  ];
+  var T={
+    participants:{g:0,purpose:"참여자를 식별하고 참여 상태를 관리. 직접식별정보 없이 익명 ID만.",
+      fields:[["participant_id","익명 ID (P001)","PK"],["status","예정/참여중/완료/철회",""],["timezone","시간 넛지 기준",""],["enrolled_at","등록일",""]],
+      links:["자식 → <b>sessions · nudge_events · measurements</b>","실명↔ID 연결표는 앱 밖에서 분리 보관"]},
+    sessions:{g:0,purpose:"웹앱을 열고 종료할 때까지 한 번의 접속.",
+      fields:[["session_id","세션 ID","PK"],["participant_id","참여자","FK"],["started_at / ended_at","시작·종료 시각",""],["device_type","mobile/tablet/desktop",""]],
+      links:["부모 → participants","자식 → <b>messages · events · technical_errors</b>"]},
+    messages:{g:1,purpose:"채팅창의 모든 메시지(사용자·AI)를 시간순 저장.",
+      fields:[["message_id","메시지 ID","PK"],["role","user/assistant/system",""],["message_type","nudge/rag_question/rag_answer/safety…",""],["content","내용",""]],
+      links:["부모 → sessions","자식 → <b>retrieval_logs · model_calls</b>","role과 message_type을 <b>분리</b>"]},
+    events:{g:1,purpose:"클릭·화면열기·행동선택 등 사건을 시간순으로 쌓는 로그.",
+      fields:[["event_id","이벤트 ID","PK"],["event_type","사전 정의값",""],["occurred_at","발생 시각",""],["payload_json","버튼값·점수 등",""]],
+      links:["부모 → sessions","참여자별 <b>시간순 행동 경로</b> 재구성"]},
+    nudge_events:{g:2,purpose:"넛지의 예정·노출·반응을 함께 기록하는 핵심 전용 테이블.",
+      fields:[["nudge_id","넛지 ID","PK"],["health_domain","식사/운동/복약/혈당",""],["scheduled_at","예정 시각",""],["displayed_at","실제 노출 시각",""],["action_commitment","하겠다고 한 행동",""]],
+      links:["부모 → participants","자식 → <b>action_followups</b>","예정≠노출 <b>분리</b> 저장"]},
+    action_followups:{g:2,purpose:"약속한 행동을 나중에 실제로 했는지 확인. 의도와 수행을 분리.",
+      fields:[["followup_id","확인 ID","PK"],["nudge_id","시작된 넛지","FK"],["planned_action","약속한 행동",""],["completion_status","완료/일부/미완료/확인불가",""]],
+      links:["부모 → nudge_events","의도(commit) → <b>수행(complete)</b> 전환 분석"]},
+    documents:{g:3,purpose:"RAG에 쓰는 승인 문서의 출처·버전 관리.",
+      fields:[["document_id","문서 ID","PK"],["title / publisher","문서명·발행기관",""],["approval_status","검토중/승인/비활성",""],["source_version","원문 버전",""]],
+      links:["자식 → <b>document_chunks</b>","개정돼도 삭제 않고 비활성화(재현성)"]},
+    document_chunks:{g:3,purpose:"긴 문서를 의미 단위로 나눈 조각 + 임베딩 벡터.",
+      fields:[["chunk_id","청크 ID","PK"],["document_id","원문","FK"],["content","청크 본문",""],["embedding","벡터(pgvector)",""],["is_active","검색 대상 여부",""]],
+      links:["부모 → documents","<b>retrieval_logs</b>가 참조","변경 청크만 재임베딩(비용↓)"]},
+    retrieval_logs:{g:3,purpose:"RAG가 어떤 근거를 찾았는지 검색 과정 자체를 저장.",
+      fields:[["retrieval_id","검색 ID","PK"],["query_text","검색 질문",""],["retrieved_chunk_ids","검색된 청크",""],["similarity_scores","유사도 점수",""],["selected_chunk_ids","실제 사용 청크",""]],
+      links:["질문·답변 <b>messages</b>와 연결","검색 품질과 답변 품질을 <b>분리 평가</b>"]},
+    measurements:{g:4,purpose:"설문·반복 자기보고 값을 세로로 누적(횡단·종단).",
+      fields:[["measurement_id","측정 ID","PK"],["measure_name","신뢰/이해도/자기효능감/행동의도…",""],["value","응답값",""],["measurement_timepoint","baseline/week1/post…",""]],
+      links:["부모 → participants","세로 누적 → 시간 변화 분석"]},
+    model_calls:{g:5,purpose:"외부 LLM·임베딩 API 호출과 토큰·비용 기록.",
+      fields:[["call_id","호출 ID","PK"],["call_type","rag_answer/query_embedding…",""],["input/output_tokens","토큰 수",""],["unit_price / estimated_cost","단가·예상비용",""]],
+      links:["관련 → messages","토큰뿐 아니라 <b>단가·기준일</b>도 함께 저장"]},
+    system_versions:{g:5,purpose:"각 데이터가 어떤 설정으로 생성됐는지 추적(재현성).",
+      fields:[["system_version_id","버전 ID","PK"],["llm_model_version","LLM 모델",""],["prompt_bundle_version","프롬프트 버전",""],["nudge_rule_version / safety_rule_version","규칙 버전",""]],
+      links:["<b>sessions·messages·events·nudge_events·retrieval_logs</b>에 연결","중간 설정 변경 통제"]},
+    technical_errors:{g:5,purpose:"API·DB·검색 실패를 연구 행동 데이터와 분리해 기록.",
+      fields:[["error_id","오류 ID","PK"],["error_type","API/DB/검색 실패",""],["error_message","오류 내용",""],["resolved_status","해결 여부",""]],
+      links:["관련 → sessions","무응답이 <b>무관심인지 시스템 실패인지</b> 구분"]}
+  };
+  var groupsEl=document.getElementById("groups"), detailEl=document.getElementById("detail"), chips={};
+  function select(name){
+    var t=T[name], g=GROUPS[t.g];
+    Object.keys(chips).forEach(function(k){chips[k].setAttribute("aria-pressed",k===name)});
+    detailEl.innerHTML=
+      '<span class="badge" style="background:'+g.color+'">'+g.name+'</span>'+
+      '<h3>'+name+'</h3>'+
+      '<p class="purpose">'+t.purpose+'</p>'+
+      '<div class="lbl">주요 필드</div><div class="fields">'+
+        t.fields.map(function(f){return '<div class="field"><code>'+f[0]+(f[2]?'<span class="fk">'+f[2]+'</span>':'')+'</code><span class="fd">'+f[1]+'</span></div>'}).join("")+
+      '</div>'+
+      '<div class="lbl">연결관계</div><div class="links">'+
+        t.links.map(function(l){return '<div>'+l+'</div>'}).join("")+
+      '</div>';
+  }
+  GROUPS.forEach(function(g){
+    var wrap=document.createElement("div"); wrap.className="group";
+    wrap.innerHTML='<h2>'+g.name+'</h2>';
+    var chipsWrap=document.createElement("div"); chipsWrap.className="chips";
+    g.tables.forEach(function(name){
+      var b=document.createElement("button"); b.className="chip"; b.style.color=g.color;
+      b.innerHTML='<span class="dot" style="background:'+g.color+'"></span><span style="color:var(--ink)">'+name+'</span>';
+      b.addEventListener("click",function(){select(name)});
+      chips[name]=b; chipsWrap.appendChild(b);
+    });
+    wrap.appendChild(chipsWrap); groupsEl.appendChild(wrap);
+  });
+  select("participants");
+</script>
+</body>
+</html>
