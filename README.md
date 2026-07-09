@@ -41,10 +41,10 @@
 
 ## 현재 개발 단계
 
-**Phase 0 — 설계 · 규칙 고정 (진행 중, 2026-07 1주차)**
+**Phase 0 — 설계 · 규칙 고정 완료 (2026-07 1주차)** → 다음: Phase 1 (웹앱 · DB 골격)
 
-기능을 구현하기보다, 프로젝트 구조를 개발용 문서 · 규칙(v0.1 초안)으로 고정하는 단계다.
-전체 로드맵은 [PRD.md](PRD.md)의 단계별 구현 계획을 참고한다.
+1주차에 프로젝트 구조를 개발용 문서 · 규칙(v0.1 초안)으로 고정했다.
+다음 첫 작업은 **참여자 코드 입력 · 세션 생성**([TASKS.md](TASKS.md) T1.1)이다. 전체 로드맵은 [PRD.md](PRD.md) 참고.
 
 ## 프로젝트 문서 안내
 
@@ -52,17 +52,18 @@
 |------|------|------|
 | [README.md](README.md) | 프로젝트 개요 | ✅ v0.1 |
 | [PRD.md](PRD.md) | 제품 · 연구 요구사항, MVP 범위 | ✅ v0.1 |
-| CLAUDE.md | 코딩 에이전트 최상위 규칙 | ⏳ Day 2 |
-| DATA_SCHEMA.md | 테이블 · 필드 정의 | ⏳ Day 3 |
-| EVENT_DICTIONARY.md | 이벤트 이름 · 의미 | ⏳ Day 3 |
-| NUDGE_RULES.md | 넛지 유형 · 트리거 · 반복 제한 | ⏳ Day 4 |
-| RAG_RULES.md | 검색 · 답변 원칙 | ⏳ Day 4 |
-| SAFETY_RULES.md | 건강정보 안전 규칙 | ⏳ Day 4 |
-| COST_PLAN.md | API 비용 산정 · 기록 기준 | ⏳ Day 5 |
-| TASKS.md | 작은 단위 작업 목록 | ⏳ Day 5 |
-| DECISIONS.md | 기술 의사결정 기록 | ⏳ Day 5 |
-| PROGRESS.md | 진행 상태 | ⏳ Day 5 |
-| `.claude/rules/` | 아키텍처 · 연구데이터 · 의료안전 세부 규칙 | ⏳ Day 2 |
+| [CLAUDE.md](CLAUDE.md) | 코딩 에이전트 최상위 규칙 | ✅ v0.1 |
+| [DATA_SCHEMA.md](DATA_SCHEMA.md) | 테이블 · 필드 정의 (13개) | ✅ v0.1 |
+| [EVENT_DICTIONARY.md](EVENT_DICTIONARY.md) | 이벤트 이름 · 의미 (13개) | ✅ v0.1 |
+| [NUDGE_RULES.md](NUDGE_RULES.md) | 넛지 유형 · 트리거 · 반복 제한 | ✅ v0.1 |
+| [RAG_RULES.md](RAG_RULES.md) | 검색 · 답변 원칙 | ✅ v0.1 |
+| [SAFETY_RULES.md](SAFETY_RULES.md) | 건강정보 안전 규칙 | ✅ v0.1 |
+| [COST_PLAN.md](COST_PLAN.md) | API 비용 산정 · 기록 기준 | ✅ v0.1 |
+| [TASKS.md](TASKS.md) | 작은 단위 작업 목록 | ✅ v0.1 |
+| [DECISIONS.md](DECISIONS.md) | 기술 의사결정 기록 | ✅ v0.1 |
+| [PROGRESS.md](PROGRESS.md) | 진행 상태 · 일관성 검수 | ✅ v0.1 |
+| [docs/analysis-targets.md](docs/analysis-targets.md) | 최소 결과물(분석 목표) · 역순 접근 | ✅ v0.1 |
+| [.claude/rules/](.claude/rules/) | 아키텍처 · 연구데이터 · 의료안전 세부 규칙 | ✅ v0.1 |
 
 ## 폴더 구조
 
