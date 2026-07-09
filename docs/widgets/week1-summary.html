@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>1주차 완료 대시보드</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#ffffff; --ink:#1b2430; --soft:#55606d; --faint:#8b95a1;
+    --line:#e2e6ea; --accent:#1f6f78; --accent-bg:#e4f0f0; --done:#2f7d4f; --done-bg:#e5f1e9;
+    --shadow:0 1px 2px rgba(20,30,45,.06);
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#10161d; --card:#182029; --ink:#e8ecf0; --soft:#aab4c0; --faint:#7c8896;
+      --line:#28323d; --accent:#4fb6bf; --accent-bg:#15303220; --done:#5aa877; --done-bg:#16261c;
+      --shadow:none;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    font-family:"Pretendard",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Segoe UI",system-ui,sans-serif;
+    background:var(--bg); color:var(--ink); line-height:1.55; padding:18px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .app{max-width:720px;margin:0 auto}
+  .kicker{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:6px}
+  h1{font-size:20px;font-weight:800;margin:0 0 10px;letter-spacing:-.01em}
+  .bar{height:9px;border-radius:99px;background:var(--line);overflow:hidden}
+  .bar>span{display:block;height:100%;width:100%;background:var(--done);border-radius:99px}
+  .barnote{font-size:12.5px;color:var(--soft);margin:8px 0 0}
+  .barnote b{color:var(--done)}
+  .stat{display:flex;gap:10px;margin:14px 0 4px;flex-wrap:wrap}
+  .pill{font-size:12px;font-weight:600;color:var(--soft);background:var(--card);border:1px solid var(--line);border-radius:99px;padding:5px 12px}
+  .pill b{color:var(--ink)}
+  ul{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+  .day{background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
+  .day.open{border-color:color-mix(in srgb,var(--done) 40%,var(--line))}
+  .d-btn{width:100%;text-align:left;background:none;border:0;cursor:pointer;color:inherit;
+    display:flex;align-items:center;gap:12px;padding:13px 15px;font:inherit}
+  .d-btn:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+  .check{width:22px;height:22px;border-radius:50%;background:var(--done-bg);color:var(--done);
+    display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex:none}
+  .d-num{font-family:ui-monospace,Menlo,monospace;font-size:12px;font-weight:700;color:var(--faint);min-width:38px}
+  .d-title{flex:1;font-weight:700;font-size:14px}
+  .chev{color:var(--faint);font-size:12px;transition:transform .18s ease}
+  .day.open .chev{transform:rotate(90deg)}
+  .body{display:none;padding:0 15px 14px 49px}
+  .day.open .body{display:block}
+  .body p{margin:0 0 9px;font-size:12.5px;color:var(--soft)}
+  .files{display:flex;flex-wrap:wrap;gap:5px}
+  .file{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:var(--soft);
+    background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:3px 8px}
+  .next{margin-top:16px;background:var(--accent-bg);border-radius:12px;padding:14px 16px}
+  .next .nl{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:5px}
+  .next .nt{font-size:13.5px;color:var(--ink);font-weight:600}
+  .next .nd{font-size:12px;color:var(--soft);margin-top:3px}
+  @media (prefers-reduced-motion:reduce){.chev{transition:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="kicker">Phase 0 · 1주차</div>
+  <h1>설계·규칙 고정 — 1주차 완료 ✅</h1>
+  <div class="bar"><span></span></div>
+  <div class="barnote"><b>5/5 Day 완료</b> · 코딩 없이 프로젝트의 설계도와 규칙서를 문서로 확정한 주간</div>
+  <div class="stat">
+    <span class="pill">문서 <b>15+</b></span>
+    <span class="pill">데이터 테이블 <b>13</b></span>
+    <span class="pill">이벤트 <b>13</b></span>
+    <span class="pill">인터랙티브 위젯 <b>5</b></span>
+  </div>
+  <ul id="list"></ul>
+  <div class="next">
+    <div class="nl">다음 주 첫 작업 ▶</div>
+    <div class="nt">참여자 코드 입력 · 참여자 확인 · 세션 생성 (T1.1)</div>
+    <div class="nd">유효 코드 → 세션·이벤트 저장 / 무효 차단 / 새로고침 중복 없음. 선행 결정: 참여자 인증 방식.</div>
+  </div>
+</div>
+<script>
+  var DAYS=[
+    {n:"Day 1",t:"작업공간 · PRD",d:"폴더 구조·GitHub 연결, MVP 포함/제외 범위 확정.",
+     files:["README.md","PRD.md",".gitignore"]},
+    {n:"Day 2",t:"코딩 에이전트 규칙",d:"AI가 항상 지킬 최상위 규칙과 세부 규칙 3종.",
+     files:["CLAUDE.md","architecture.md","research-data.md","medical-safety.md"]},
+    {n:"Day 3",t:"데이터 정의",d:"어떤 데이터를 언제·어디에 저장할지 확정.",
+     files:["DATA_SCHEMA.md (13테이블)","EVENT_DICTIONARY.md (13이벤트)"]},
+    {n:"Day 4",t:"판단 규칙",d:"넛지·RAG·안전을 어떤 기준으로 판단·응답할지.",
+     files:["NUDGE_RULES.md","RAG_RULES.md","SAFETY_RULES.md"]},
+    {n:"Day 5",t:"백로그 · 검수",d:"작업 분해, 의사결정, 비용, 분석목표(역순 접근), 일관성 검수.",
+     files:["TASKS.md","DECISIONS.md","PROGRESS.md","COST_PLAN.md","analysis-targets.md"]}
+  ];
+  var list=document.getElementById("list");
+  DAYS.forEach(function(p,i){
+    var li=document.createElement("li");
+    li.className="day"+(i===4?" open":"");
+    li.innerHTML=
+      '<button class="d-btn" aria-expanded="'+(i===4)+'">'+
+        '<span class="check">&#10003;</span>'+
+        '<span class="d-num">'+p.n.replace("Day ","D")+'</span>'+
+        '<span class="d-title">'+p.t+'</span>'+
+        '<span class="chev">&#9654;</span>'+
+      '</button>'+
+      '<div class="body"><p>'+p.d+'</p><div class="files">'+
+        p.files.map(function(f){return '<span class="file">'+f+'</span>'}).join("")+
+      '</div></div>';
+    var btn=li.querySelector(".d-btn");
+    btn.addEventListener("click",function(){
+      var open=li.classList.toggle("open");
+      btn.setAttribute("aria-expanded",open);
+    });
+    list.appendChild(li);
+  });
+</script>
+</body>
+</html>
