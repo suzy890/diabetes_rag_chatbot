@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>질문 처리 시뮬레이터</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#ffffff; --ink:#1b2430; --soft:#55606d; --faint:#8b95a1;
+    --line:#e2e6ea; --accent:#1f6f78; --accent-bg:#e4f0f0;
+    --green:#2f7d4f; --green-bg:#e5f1e9; --amber:#8a5a12; --amber-bg:#f7edda;
+    --blue:#2a5f8a; --blue-bg:#e6eef6; --red:#b4453b; --red-bg:#f6e5e2; --gray:#6b7683; --gray-bg:#edeff1;
+    --shadow:0 1px 2px rgba(20,30,45,.06);
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#10161d; --card:#182029; --ink:#e8ecf0; --soft:#aab4c0; --faint:#7c8896;
+      --line:#28323d; --accent:#4fb6bf; --accent-bg:#15303220;
+      --green:#5aa877; --green-bg:#16261c; --amber:#d8a55a; --amber-bg:#2a220f;
+      --blue:#6fa8d6; --blue-bg:#152430; --red:#d9756b; --red-bg:#301a17; --gray:#8b95a1; --gray-bg:#1f272f;
+      --shadow:none;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    font-family:"Pretendard",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Segoe UI",system-ui,sans-serif;
+    background:var(--bg); color:var(--ink); line-height:1.5; padding:18px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .app{max-width:760px;margin:0 auto}
+  .kicker{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:6px}
+  h1{font-size:19px;font-weight:800;margin:0 0 4px;letter-spacing:-.01em}
+  .sub{font-size:12.5px;color:var(--soft);margin:0 0 14px}
+  .qs{display:flex;flex-direction:column;gap:7px;margin-bottom:16px}
+  .q{font:inherit;font-size:13.5px;text-align:left;cursor:pointer;color:var(--ink);
+    background:var(--card);border:1px solid var(--line);border-radius:10px;padding:11px 14px;
+    display:flex;align-items:center;gap:10px;transition:border-color .15s}
+  .q:hover{border-color:var(--faint)}
+  .q[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-bg)}
+  .q:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .q .qi{color:var(--faint);font-size:15px}
+  .out{border-radius:12px;padding:18px;border:1px solid var(--line);background:var(--card);box-shadow:var(--shadow)}
+  .out .badge{font-size:11px;font-weight:800;letter-spacing:.03em;padding:4px 11px;border-radius:99px;color:#fff;display:inline-block}
+  .out .stop{font-size:11px;font-weight:700;margin-left:8px;color:var(--soft)}
+  .out h3{font-size:14px;font-weight:700;margin:12px 0 4px}
+  .out .how{font-size:13.5px;color:var(--ink);margin:0 0 12px}
+  .reply{font-size:13px;color:var(--soft);background:var(--bg);border-radius:9px;padding:11px 13px;border-left:3px solid var(--line)}
+  .reply .rl{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);display:block;margin-bottom:4px}
+  .why{font-size:12px;color:var(--faint);margin-top:10px}
+  .note{margin-top:16px;font-size:12.5px;color:var(--soft);background:var(--accent-bg);border-radius:10px;padding:12px 14px}
+  .note b{color:var(--ink)}
+  @media (prefers-reduced-motion:reduce){.q{transition:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="kicker">SAFETY · RAG 규칙</div>
+  <h1>질문이 들어오면 어떻게 처리되나</h1>
+  <p class="sub">예시 질문을 눌러보세요. AI가 질문을 5가지로 분류해, 안전 안내는 <b>진짜 위험한 질문에만</b> 띄우고 나머지는 정보를 제공합니다.</p>
+  <div class="qs" id="qs"></div>
+  <div class="out" id="out"></div>
+  <div class="note">
+    <b>균형 원칙:</b> ①②③은 <b>정보를 제공</b>하되 필요한 한계·상담 권고를 덧붙입니다. <b>④(고위험)만</b> 일반 흐름을 멈추고 안전 안내를 앞세웁니다 — <b>안전은 지키되, 남발하지 않기.</b>
+  </div>
+</div>
+<script>
+  var CATS={
+    info:{label:"① 일반 정보",color:"var(--green)",stop:"정상 답변"},
+    weak:{label:"② 근거 부족",color:"var(--amber)",stop:"3단계 처리"},
+    refer:{label:"③ 의료진 확인 필요",color:"var(--blue)",stop:"정보 + 권고"},
+    high:{label:"④ 고위험",color:"var(--red)",stop:"⛔ 흐름 멈춤 · 안전 우선"},
+    off:{label:"⑤ 무관",color:"var(--gray)",stop:"범위 밖"}
+  };
+  var QS=[
+    {q:"당뇨가 있는데 바나나를 먹어도 되나요?",c:"info",
+     how:"승인 문서에서 근거를 찾아 일반적인 정보를 답하고 출처를 함께 보여줍니다.",
+     reply:"일반적으로 바나나는 적당량이면 드셔도 괜찮다고 알려져 있어요. (출처: △△ 당뇨 식이 가이드)",
+     why:"위험하지 않은 일반 자기관리 질문 → 정상 RAG 흐름."},
+    {q:"식후 혈당은 언제 재는 게 좋아요?",c:"info",
+     how:"승인 문서 기반으로 답하고 출처를 표시합니다.",
+     reply:"보통 식사 시작 후 2시간쯤 측정하도록 권장됩니다. (출처: △△ 혈당관리 자료)",
+     why:"표준적 정보 질문 → 안전 안내 불필요."},
+    {q:"'○○'라는 최신 당뇨 보조제 효과 어때요? (자료에 없음)",c:"weak",
+     how:"지식베이스에 근거가 약하면 추측하지 않습니다. 부분 근거면 일반 정보 + 한계 명시, 근거가 거의 없으면 보류합니다.",
+     reply:"지금 가진 자료에서는 이 제품에 대한 충분한 근거를 찾지 못했어요. 정확한 건 의료진과 상의해 주세요.",
+     why:"근거 부족 → 3단계로 처리(무조건 거절이 아니라 단계적). 남발 방지."},
+    {q:"제 약을 아침에 먹을까요, 저녁에 먹을까요?",c:"refer",
+     how:"완전히 거절하지 않고, 일반 정보를 주되 개인 복약 시점은 의료진·약사 상담을 권합니다.",
+     reply:"복용 시점은 약 종류와 개인 상태에 따라 달라요. 담당 의료진·약사와 상의하시는 게 가장 안전합니다.",
+     why:"개인 맞춤 판단이 필요 → 정보 + 상담 권고(과잉 차단 아님)."},
+    {q:"인슐린 용량을 좀 줄여도 될까요?",c:"high",
+     how:"약물 용량 변경은 위험할 수 있어 직접 지시하지 않고, 고정 안전 안내를 먼저 보여줍니다.",
+     reply:"약의 용량은 사람마다 다르고 위험할 수 있어 여기서 바꾸도록 안내드리기 어려워요. 담당 의료진·약사와 꼭 상의해 주세요.",
+     why:"복약 용량 변경 = 고위험 → 일반 흐름 멈추고 안전 우선. safety_message_shown 기록."},
+    {q:"혈당이 40이고 식은땀이 나고 어지러워요.",c:"high",
+     how:"응급 가능성이 감지되면 즉시 고정 응급 안내를 우선합니다. (응급 문구·기준은 의료전문가 검토)",
+     reply:"지금 증상이 위급할 수 있어요. 즉시 담당 의료기관에 연락하시고, 응급 상황이면 119에 도움을 요청해 주세요.",
+     why:"응급 고위험 → 최우선 안전 안내."},
+    {q:"오늘 날씨 어때요?",c:"off",
+     how:"당뇨 건강정보와 무관한 질문은 범위 밖임을 안내합니다.",
+     reply:"저는 당뇨 건강관리를 도와드리는 도우미예요. 그 부분은 도와드리기 어려워요.",
+     why:"범위 밖 → 안전 문제 아님, 간단 안내."}
+  ];
+  var qsEl=document.getElementById("qs"), outEl=document.getElementById("out"), btns=[];
+  function show(i){
+    var d=QS[i], c=CATS[d.c];
+    btns.forEach(function(b,j){b.setAttribute("aria-pressed",j===i)});
+    outEl.innerHTML=
+      '<span class="badge" style="background:'+c.color+'">'+c.label+'</span><span class="stop">'+c.stop+'</span>'+
+      '<h3>처리 방식</h3><p class="how">'+d.how+'</p>'+
+      '<div class="reply" style="border-left-color:'+c.color+'"><span class="rl">예시 응답</span>'+d.reply+'</div>'+
+      '<p class="why">💡 '+d.why+'</p>';
+  }
+  QS.forEach(function(d,i){
+    var b=document.createElement("button"); b.className="q";
+    b.innerHTML='<span class="qi">&#128172;</span><span>'+d.q+'</span>';
+    b.addEventListener("click",function(){show(i)});
+    btns.push(b); qsEl.appendChild(b);
+  });
+  show(0);
+</script>
+</body>
+</html>
