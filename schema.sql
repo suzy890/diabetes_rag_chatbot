@@ -87,12 +87,31 @@ create index if not exists idx_events_session on events (session_id);
 create index if not exists idx_events_type on events (event_type);
 
 -- ─────────────────────────────────────────────────────────────
+-- 5. technical_errors — 기술 오류 (연구 행동 데이터와 분리)
+--    사용자의 무응답이 '실제 무관심'인지 '시스템 실패'인지 구분하기 위함.
+-- ─────────────────────────────────────────────────────────────
+create table if not exists technical_errors (
+    error_id        uuid        primary key default gen_random_uuid(),
+    participant_id  text        references participants(participant_id),
+    session_id      uuid        references sessions(session_id),
+    error_type      text        not null,
+    error_message   text        not null,
+    occurred_at     timestamptz not null default now(),
+    resolved_status text        not null default 'open'
+                    check (resolved_status in ('open', 'investigating', 'resolved', 'ignored'))
+);
+
+create index if not exists idx_tech_errors_time on technical_errors (occurred_at);
+create index if not exists idx_tech_errors_type on technical_errors (error_type);
+
+-- ─────────────────────────────────────────────────────────────
 -- RLS: 전 테이블 활성화 (정책 없음 = 외부 접근 전면 차단)
 -- ─────────────────────────────────────────────────────────────
-alter table system_versions enable row level security;
-alter table participants    enable row level security;
-alter table sessions        enable row level security;
-alter table events          enable row level security;
+alter table system_versions  enable row level security;
+alter table participants     enable row level security;
+alter table sessions         enable row level security;
+alter table events           enable row level security;
+alter table technical_errors enable row level security;
 
 -- ─────────────────────────────────────────────────────────────
 -- 초기 시스템 버전 1건 (현재 활성)

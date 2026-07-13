@@ -1,6 +1,8 @@
 """Supabase 저장·조회 담당. 다른 모듈은 여기를 거쳐서만 DB에 접근한다 (architecture.md 규칙)."""
 
+from datetime import datetime, timedelta, timezone
 from functools import lru_cache
+from typing import Any
 
 from supabase import Client, create_client
 
@@ -31,5 +33,101 @@ def check_connection() -> tuple[bool, str]:
     except Exception as exc:
         message = str(exc)
         if any(hint in message for hint in _TABLE_MISSING_HINTS):
-            return True, "연결 성공 — 인증 통과, 아직 테이블 없음(Step 2에서 생성 예정)"
+            return True, "연결 성공 — 인증 통과, 아직 테이블 없음"
         return False, f"연결 실패: {message}"
+
+
+@lru_cache(maxsize=1)
+def get_active_system_version_id() -> str:
+    """현재 활성 시스템 버전. 모든 연구 기록에 붙는다 (research-data.md 필수 규칙)."""
+    rows = (
+        get_client().table("system_versions").select("system_version_id")
+        .is_("deactivated_at", "null").order("activated_at", desc=True).limit(1)
+        .execute().data
+    )
+    if not rows:
+        raise RuntimeError("활성 system_versions 행이 없습니다.")
+    return rows[0]["system_version_id"]
+
+
+def get_participant(participant_id: str) -> dict | None:
+    """참여자 명단에서 코드를 찾는다. 없으면 None."""
+    rows = (
+        get_client().table("participants").select("*")
+        .eq("participant_id", participant_id).limit(1)
+        .execute().data
+    )
+    return rows[0] if rows else None
+
+
+def find_open_session(participant_id: str) -> dict | None:
+    """아직 끝나지 않았고 최근에 시작된 세션을 찾는다.
+
+    새로고침으로 세션이 중복 생성되는 것을 막는 핵심 장치다 (research-data.md).
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=config.SESSION_RESUME_HOURS)
+    rows = (
+        get_client().table("sessions").select("*")
+        .eq("participant_id", participant_id)
+        .is_("ended_at", "null")
+        .gte("started_at", cutoff.isoformat())
+        .order("started_at", desc=True).limit(1)
+        .execute().data
+    )
+    return rows[0] if rows else None
+
+
+def create_session(participant_id: str, device_type: str | None = None) -> dict:
+    """새 접속 세션을 만든다."""
+    row: dict[str, Any] = {
+        "participant_id": participant_id,
+        "system_version_id": get_active_system_version_id(),
+    }
+    if device_type:
+        row["device_type"] = device_type
+    return get_client().table("sessions").insert(row).execute().data[0]
+
+
+def log_event(
+    event_type: str,
+    participant_id: str | None = None,
+    session_id: str | None = None,
+    payload: dict[str, Any] | None = None,
+) -> None:
+    """행동 이벤트를 기록한다.
+
+    participant_id·session_id는 인증 전 이벤트(app_opened)에서는 비어 있을 수 있다.
+    """
+    row: dict[str, Any] = {
+        "event_type": event_type,
+        "system_version_id": get_active_system_version_id(),
+    }
+    if participant_id:
+        row["participant_id"] = participant_id
+    if session_id:
+        row["session_id"] = session_id
+    if payload:
+        row["payload_json"] = payload
+    get_client().table("events").insert(row).execute()
+
+
+def log_technical_error(
+    error_type: str,
+    error_message: str,
+    participant_id: str | None = None,
+    session_id: str | None = None,
+) -> None:
+    """기술 오류를 연구 행동 데이터와 분리해 기록한다 (research-data.md).
+
+    사용자의 무응답이 '무관심'인지 '시스템 실패'인지 구분하기 위함이다.
+    오류 기록 자체가 실패해도 앱을 멈추지는 않는다.
+    """
+    row: dict[str, Any] = {"error_type": error_type, "error_message": error_message[:2000]}
+    if participant_id:
+        row["participant_id"] = participant_id
+    if session_id:
+        row["session_id"] = session_id
+    try:
+        get_client().table("technical_errors").insert(row).execute()
+    except Exception:
+        pass
