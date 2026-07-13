@@ -87,7 +87,36 @@ create index if not exists idx_events_session on events (session_id);
 create index if not exists idx_events_type on events (event_type);
 
 -- ─────────────────────────────────────────────────────────────
--- 5. technical_errors — 기술 오류 (연구 행동 데이터와 분리)
+-- 5. messages — 채팅창에 나타난 모든 메시지 (사용자·AI)
+--    role(누가 보냈나)과 message_type(연구적으로 어떤 성격인가)을 분리한다.
+--    AI가 보낸 메시지라도 넛지인지 RAG 답변인지 안전 안내인지 의미가 다르기 때문.
+-- ─────────────────────────────────────────────────────────────
+create table if not exists messages (
+    message_id        uuid        primary key default gen_random_uuid(),
+    session_id        uuid        not null,
+    participant_id    text        not null,
+    system_version_id uuid        not null references system_versions(system_version_id),
+    role              text        not null check (role in ('user', 'assistant', 'system')),
+    message_type      text        not null check (message_type in (
+                          'nudge', 'nudge_response', 'rag_question', 'rag_answer',
+                          'safety_message', 'free_text', 'system_notice')),
+    content           text        not null,
+    created_at        timestamptz not null default now(),
+    -- 참여자·세션 일관성을 DB가 원천 보장 (events와 동일 원칙)
+    constraint messages_session_participant_fk
+        foreign key (session_id, participant_id)
+        references sessions (session_id, participant_id)
+);
+
+create index if not exists idx_messages_session_time on messages (session_id, created_at);
+
+-- messages가 생겼으므로 events.related_message_id 의 FK를 연결한다.
+alter table events
+    add constraint events_related_message_fk
+    foreign key (related_message_id) references messages (message_id);
+
+-- ─────────────────────────────────────────────────────────────
+-- 6. technical_errors — 기술 오류 (연구 행동 데이터와 분리)
 --    사용자의 무응답이 '실제 무관심'인지 '시스템 실패'인지 구분하기 위함.
 -- ─────────────────────────────────────────────────────────────
 create table if not exists technical_errors (
@@ -111,6 +140,7 @@ alter table system_versions  enable row level security;
 alter table participants     enable row level security;
 alter table sessions         enable row level security;
 alter table events           enable row level security;
+alter table messages         enable row level security;
 alter table technical_errors enable row level security;
 
 -- ─────────────────────────────────────────────────────────────

@@ -88,11 +88,47 @@ def create_session(participant_id: str, device_type: str | None = None) -> dict:
     return get_client().table("sessions").insert(row).execute().data[0]
 
 
+def save_message(
+    session_id: str,
+    participant_id: str,
+    role: str,
+    message_type: str,
+    content: str,
+) -> dict:
+    """대화 메시지를 저장한다.
+
+    role(누가 보냈나)과 message_type(연구적으로 어떤 성격인가)을 분리해 기록한다.
+    """
+    row = {
+        "session_id": session_id,
+        "participant_id": participant_id,
+        "system_version_id": get_active_system_version_id(),
+        "role": role,
+        "message_type": message_type,
+        "content": content,
+    }
+    return get_client().table("messages").insert(row).execute().data[0]
+
+
+def get_messages(session_id: str) -> list[dict]:
+    """세션의 대화를 시간순으로 불러온다.
+
+    화면 상태가 아니라 DB를 진실의 원천으로 삼는다 → 새로고침해도 대화가 복원된다.
+    """
+    return (
+        get_client().table("messages").select("*")
+        .eq("session_id", session_id)
+        .order("created_at")
+        .execute().data
+    )
+
+
 def log_event(
     event_type: str,
     participant_id: str | None = None,
     session_id: str | None = None,
     payload: dict[str, Any] | None = None,
+    related_message_id: str | None = None,
 ) -> None:
     """행동 이벤트를 기록한다.
 
@@ -108,6 +144,8 @@ def log_event(
         row["session_id"] = session_id
     if payload:
         row["payload_json"] = payload
+    if related_message_id:
+        row["related_message_id"] = related_message_id
     get_client().table("events").insert(row).execute()
 
 

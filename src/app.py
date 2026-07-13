@@ -81,15 +81,54 @@ def render_login() -> None:
     st.rerun()
 
 
-def render_home() -> None:
+def render_chat() -> None:
+    participant_id = st.session_state["participant_id"]
+    session_id = st.session_state["session_id"]
+
     st.title("당뇨 건강 도우미")
-    st.success(f"{st.session_state['participant_id']}님, 안녕하세요.")
-    st.caption("접속이 기록되었습니다. 다음 단계에서 대화 화면이 추가됩니다.")
+    st.caption(f"{participant_id}님, 안녕하세요.")
+
+    # 화면 상태가 아니라 DB에서 대화를 불러온다 → 새로고침해도 복원된다.
+    try:
+        messages = database.get_messages(session_id)
+    except Exception as exc:
+        database.log_technical_error(
+            "db_select_failed", f"get_messages: {exc}", participant_id, session_id
+        )
+        st.error("대화를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.")
+        return
+
+    for message in messages:
+        with st.chat_message(message["role"]):
+            st.write(message["content"])
+
+    if not messages:
+        st.info("아직 대화가 없습니다. 아래에 자유롭게 입력해 보세요.")
+
+    typed = st.chat_input("메시지를 입력하세요")
+    if not typed or not typed.strip():
+        return
+
+    try:
+        saved = database.save_message(
+            session_id, participant_id, "user", "free_text", typed.strip()
+        )
+        database.log_event(
+            "question_asked", participant_id, session_id, related_message_id=saved["message_id"]
+        )
+    except Exception as exc:
+        database.log_technical_error(
+            "db_insert_failed", f"save_message: {exc}", participant_id, session_id
+        )
+        st.error("메시지를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.")
+        return
+
+    st.rerun()
 
 
 log_app_opened_once()
 
 if "session_id" in st.session_state:
-    render_home()
+    render_chat()
 else:
     render_login()
