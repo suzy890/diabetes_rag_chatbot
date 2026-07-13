@@ -116,7 +116,42 @@ alter table events
     foreign key (related_message_id) references messages (message_id);
 
 -- ─────────────────────────────────────────────────────────────
--- 6. technical_errors — 기술 오류 (연구 행동 데이터와 분리)
+-- 6. nudge_events — 넛지의 예정·노출·반응 (넛지 연구의 핵심 테이블)
+--    예정 시각(scheduled_at)과 실제 노출 시각(displayed_at)을 분리한다:
+--    앱을 열지 않으면 예정은 됐어도 노출되지 않기 때문.
+-- ─────────────────────────────────────────────────────────────
+create table if not exists nudge_events (
+    nudge_id          uuid        primary key default gen_random_uuid(),
+    participant_id    text        not null references participants(participant_id),
+    session_id        uuid,
+    system_version_id uuid        not null references system_versions(system_version_id),
+    message_id        uuid        references messages(message_id),   -- 실제로 보여준 메시지
+    trigger_type      text        not null
+                      check (trigger_type in ('app_open', 'scheduled', 'behavior_based')),
+    health_domain     text        not null
+                      check (health_domain in ('meal', 'exercise', 'medication', 'glucose')),
+    nudge_type        text        not null
+                      check (nudge_type in ('info', 'choice', 'small_action', 'self_efficacy')),
+    template_key      text        not null,     -- 어떤 템플릿이 떴는지 (템플릿별 반응률 분석용)
+    template_version  text        not null,
+    scheduled_at      timestamptz not null default now(),
+    displayed_at      timestamptz,
+    responded_at      timestamptz,
+    response          text,
+    action_commitment text,
+    status            text        not null default 'scheduled'
+                      check (status in ('scheduled', 'displayed', 'answered', 'no_response', 'completed')),
+    context_json      jsonb,      -- 노출 당시 맥락 (수집 우선 원칙)
+    constraint nudge_session_participant_fk
+        foreign key (session_id, participant_id)
+        references sessions (session_id, participant_id)
+);
+
+create index if not exists idx_nudge_participant_time on nudge_events (participant_id, scheduled_at);
+create index if not exists idx_nudge_status on nudge_events (participant_id, status);
+
+-- ─────────────────────────────────────────────────────────────
+-- 7. technical_errors — 기술 오류 (연구 행동 데이터와 분리)
 --    사용자의 무응답이 '실제 무관심'인지 '시스템 실패'인지 구분하기 위함.
 -- ─────────────────────────────────────────────────────────────
 create table if not exists technical_errors (
@@ -141,6 +176,7 @@ alter table participants     enable row level security;
 alter table sessions         enable row level security;
 alter table events           enable row level security;
 alter table messages         enable row level security;
+alter table nudge_events     enable row level security;
 alter table technical_errors enable row level security;
 
 -- ─────────────────────────────────────────────────────────────

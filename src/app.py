@@ -7,6 +7,7 @@ st.session_state는 화면의 임시 상태에만 쓰고, 연구 데이터는 Su
 import streamlit as st
 
 import database
+import nudge
 
 st.set_page_config(page_title="당뇨 건강 도우미", page_icon="💙")
 
@@ -81,12 +82,80 @@ def render_login() -> None:
     st.rerun()
 
 
+def maybe_show_nudge(participant_id: str, session_id: str) -> None:
+    """규칙에 맞으면 AI가 먼저 넛지를 건넨다. 접속당 한 번만 판단한다(rerun 중복 방지)."""
+    if st.session_state.get("nudge_checked"):
+        return
+    st.session_state["nudge_checked"] = True
+
+    try:
+        participant = database.get_participant(participant_id)
+        template = nudge.select_nudge(participant)
+        if template is None:
+            return
+
+        message = database.save_message(
+            session_id, participant_id, "assistant", "nudge", template["text"]
+        )
+        record = database.create_nudge(
+            participant_id, session_id,
+            {**template, "template_version": nudge.TEMPLATE_VERSION},
+            message["message_id"],
+        )
+        database.log_event("nudge_scheduled", participant_id, session_id)
+        database.log_event(
+            "nudge_displayed", participant_id, session_id,
+            payload={"template_key": template["key"]},
+            related_message_id=message["message_id"],
+        )
+        st.session_state["nudge_options"] = template["options"]
+        st.session_state["nudge_id"] = record["nudge_id"]
+    except Exception as exc:
+        database.log_technical_error(
+            "nudge_failed", f"maybe_show_nudge: {exc}", participant_id, session_id
+        )
+
+
+def render_nudge_options(participant_id: str, session_id: str) -> None:
+    """답하지 않은 넛지가 있으면 선택지를 보여준다. 거절·나중에 선택지를 항상 포함한다."""
+    pending = database.get_unanswered_nudge(participant_id, session_id)
+    if not pending:
+        return
+
+    options = st.session_state.get("nudge_options")
+    if not options:
+        template = next((t for t in nudge.TEMPLATES if t["key"] == pending["template_key"]), None)
+        options = template["options"] if template else None
+    if not options:
+        return
+
+    columns = st.columns(len(options))
+    for column, option in zip(columns, options):
+        if not column.button(option, key=f"nudge_{pending['nudge_id']}_{option}"):
+            continue
+        try:
+            database.save_message(session_id, participant_id, "user", "nudge_response", option)
+            database.record_nudge_response(pending["nudge_id"], option)
+            database.log_event("nudge_answered", participant_id, session_id,
+                               payload={"response": option})
+        except Exception as exc:
+            database.log_technical_error(
+                "db_insert_failed", f"nudge_response: {exc}", participant_id, session_id
+            )
+            st.error("응답을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.")
+            return
+        st.session_state.pop("nudge_options", None)
+        st.rerun()
+
+
 def render_chat() -> None:
     participant_id = st.session_state["participant_id"]
     session_id = st.session_state["session_id"]
 
     st.title("당뇨 건강 도우미")
     st.caption(f"{participant_id}님, 안녕하세요.")
+
+    maybe_show_nudge(participant_id, session_id)
 
     # 화면 상태가 아니라 DB에서 대화를 불러온다 → 새로고침해도 복원된다.
     try:
@@ -104,6 +173,8 @@ def render_chat() -> None:
 
     if not messages:
         st.info("아직 대화가 없습니다. 아래에 자유롭게 입력해 보세요.")
+
+    render_nudge_options(participant_id, session_id)
 
     typed = st.chat_input("메시지를 입력하세요")
     if not typed or not typed.strip():

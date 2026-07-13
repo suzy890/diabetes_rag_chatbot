@@ -149,6 +149,75 @@ def log_event(
     get_client().table("events").insert(row).execute()
 
 
+def count_nudges_today(
+    participant_id: str, day_start: datetime, template_key: str | None = None
+) -> int:
+    """참여자 기준 '오늘' 이미 노출된 넛지 수. 반복 제한 판단에 쓴다 (NUDGE_RULES.md)."""
+    query = (
+        get_client().table("nudge_events").select("nudge_id", count="exact")
+        .eq("participant_id", participant_id)
+        .not_.is_("displayed_at", "null")
+        .gte("scheduled_at", day_start.isoformat())
+    )
+    if template_key:
+        query = query.eq("template_key", template_key)
+    return query.execute().count or 0
+
+
+def create_nudge(
+    participant_id: str, session_id: str, template: dict, message_id: str
+) -> dict:
+    """넛지를 기록한다. 예정(scheduled_at)과 실제 노출(displayed_at)을 함께 남긴다.
+
+    MVP는 접속 시점 트리거라 예정과 노출이 사실상 동시지만, 두 시각을 분리해 저장한다.
+    (향후 예약 넛지에서는 '예정됐지만 앱을 안 열어 노출 안 됨'이 생기기 때문)
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    row = {
+        "participant_id": participant_id,
+        "session_id": session_id,
+        "system_version_id": get_active_system_version_id(),
+        "message_id": message_id,
+        "trigger_type": "app_open",
+        "health_domain": template["health_domain"],
+        "nudge_type": template["nudge_type"],
+        "template_key": template["key"],
+        "template_version": template["template_version"],
+        "scheduled_at": now,
+        "displayed_at": now,
+        "status": "displayed",
+        "context_json": template.get("context") or {},
+    }
+    return get_client().table("nudge_events").insert(row).execute().data[0]
+
+
+def get_unanswered_nudge(participant_id: str, session_id: str) -> dict | None:
+    """이 세션에서 노출됐지만 아직 답하지 않은 넛지. 새로고침해도 선택지가 살아있게 한다."""
+    rows = (
+        get_client().table("nudge_events").select("*")
+        .eq("participant_id", participant_id)
+        .eq("session_id", session_id)
+        .eq("status", "displayed")
+        .order("displayed_at", desc=True).limit(1)
+        .execute().data
+    )
+    return rows[0] if rows else None
+
+
+def record_nudge_response(nudge_id: str, response: str) -> None:
+    """넛지에 대한 사용자의 반응을 기록한다."""
+    (
+        get_client().table("nudge_events")
+        .update({
+            "responded_at": datetime.now(timezone.utc).isoformat(),
+            "response": response,
+            "status": "answered",
+        })
+        .eq("nudge_id", nudge_id)
+        .execute()
+    )
+
+
 def log_technical_error(
     error_type: str,
     error_message: str,
