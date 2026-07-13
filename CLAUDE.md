@@ -57,7 +57,7 @@
 
 ## 5. 연구 데이터 · 안전 규칙 (요약 — 세부는 별도 문서)
 
-- 모든 연구 이벤트에는 **참여자 ID · 발생 시각 · 시스템 버전**을 기록한다. → [.claude/rules/research-data.md](.claude/rules/research-data.md)
+- 모든 연구 이벤트에는 **참여자 ID · 발생 시각 · 시스템 버전**을 기록한다. (인증 전 이벤트만 참여자 ID 예외 — 세부는 규칙 문서) → [.claude/rules/research-data.md](.claude/rules/research-data.md)
 - **진단·처방·복약 변경을 직접 지시하지 않는다.** 근거가 부족하면 답변을 보류한다. → [.claude/rules/medical-safety.md](.claude/rules/medical-safety.md)
 - 실명·전화번호·주소·환자번호 등 **직접식별정보를 저장하거나 외부 API로 전송하지 않는다.**
 

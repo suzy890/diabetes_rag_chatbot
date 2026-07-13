@@ -133,8 +133,8 @@ system_versions (시스템 버전)  ──→ sessions · messages · events · 
 | 필드 | 의미 | 키/필수 |
 |------|------|--------|
 | `event_id` | 이벤트 고유 ID | PK · 필수 |
-| `participant_id` | 참여자 연결 | FK · 필수 |
-| `session_id` | 세션 연결 | FK · 필수 |
+| `participant_id` | 참여자 연결 | FK · **선택**(아래 예외 참고) |
+| `session_id` | 세션 연결 | FK · **선택**(아래 예외 참고) |
 | `event_type` | 어떤 사건인지 (사전 정의값) | 필수 |
 | `occurred_at` | 발생 시각 | 필수 |
 | `related_message_id` | 관련 메시지 | FK · 선택 |
@@ -145,6 +145,9 @@ system_versions (시스템 버전)  ──→ sessions · messages · events · 
 - **분석 의미:** 참여자별 **시간순 행동 경로** 재구성.
 - **개인정보:** payload_json에 식별정보를 넣지 않는다.
 - **중복 방지:** `event_id` 유일. 같은 사용자 행동이 rerun으로 중복 기록되지 않도록 처리.
+- **⚠️ 인증 전 이벤트 예외 (2026-07-13 결정):** `app_opened`는 참여자가 코드를 입력하기 **전**에도 발생하므로([EVENT_DICTIONARY.md](EVENT_DICTIONARY.md)), 그 시점에는 참여자·세션을 알 수 없다. 따라서 `participant_id`·`session_id`는 **nullable**이다.
+  - **인증 이후의 모든 이벤트는 두 값이 반드시 채워진다.** (`occurred_at`·`system_version_id`는 언제나 필수)
+  - 이 예외 덕분에 "앱은 열었지만 코드를 넣지 않고 이탈"한 경우를 기록할 수 있다 → 고령 사용자의 **접근성·이탈 분석**에 활용.
 
 ## 5. nudge_events — 넛지 생성·노출·반응
 
