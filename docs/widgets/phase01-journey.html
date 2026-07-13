@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 0·1 여정 대시보드</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#ffffff; --ink:#1b2430; --soft:#55606d; --faint:#8b95a1;
+    --line:#e2e6ea; --accent:#1f6f78; --accent-bg:#e4f0f0;
+    --done:#2f7d4f; --done-bg:#e5f1e9; --next:#b9701f; --next-bg:#f6ecdd;
+    --shadow:0 1px 2px rgba(20,30,45,.06);
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#10161d; --card:#182029; --ink:#e8ecf0; --soft:#aab4c0; --faint:#7c8896;
+      --line:#28323d; --accent:#4fb6bf; --accent-bg:#15303220;
+      --done:#5aa877; --done-bg:#16261c; --next:#d59a51; --next-bg:#2a220f; --shadow:none;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    font-family:"Pretendard",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Segoe UI",system-ui,sans-serif;
+    background:var(--bg); color:var(--ink); line-height:1.55; padding:18px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .app{max-width:760px;margin:0 auto}
+  .kicker{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:6px}
+  h1{font-size:20px;font-weight:800;margin:0 0 10px;letter-spacing:-.01em}
+  .bar{height:9px;border-radius:99px;background:var(--line);overflow:hidden;display:flex}
+  .bar i{display:block;height:100%}
+  .bar .p0{width:16.6%;background:var(--done)}
+  .bar .p1{width:16.6%;background:var(--done);border-left:2px solid var(--bg)}
+  .barnote{font-size:12.5px;color:var(--soft);margin:8px 0 0}
+  .barnote b{color:var(--done)}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(92px,1fr));gap:1px;
+    background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin:14px 0}
+  .stat{background:var(--card);padding:12px 10px;text-align:center}
+  .stat .v{font-size:19px;font-weight:800;color:var(--accent);font-variant-numeric:tabular-nums;line-height:1.2}
+  .stat .k{font-size:10.5px;color:var(--faint);margin-top:3px;font-weight:600}
+  ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+  .sec{background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
+  .sec.open{border-color:color-mix(in srgb,var(--accent) 35%,var(--line))}
+  .s-btn{width:100%;text-align:left;background:none;border:0;cursor:pointer;color:inherit;
+    display:flex;align-items:center;gap:11px;padding:13px 15px;font:inherit}
+  .s-btn:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+  .chip{flex:none;font-size:10px;font-weight:800;padding:3px 8px;border-radius:99px}
+  .chip.done{background:var(--done-bg);color:var(--done)}
+  .chip.next{background:var(--next-bg);color:var(--next)}
+  .s-title{flex:1;font-weight:700;font-size:14.5px}
+  .s-sub{font-size:11.5px;color:var(--faint);font-weight:500;margin-left:6px}
+  .chev{color:var(--faint);font-size:12px;transition:transform .18s ease}
+  .sec.open .chev{transform:rotate(90deg)}
+  .body{display:none;padding:0 15px 14px 15px}
+  .sec.open .body{display:block}
+  .body p{margin:0 0 10px;font-size:12.5px;color:var(--soft);padding-bottom:9px;border-bottom:1px dashed var(--line)}
+  .rows{display:flex;flex-direction:column;gap:8px}
+  .row{display:flex;gap:10px;font-size:13px;align-items:flex-start}
+  .row .b{flex:none;width:6px;height:6px;border-radius:50%;background:var(--accent);opacity:.6;margin-top:7px}
+  .row .t{color:var(--ink);line-height:1.5}
+  .row .t small{display:block;color:var(--soft);font-size:12px;margin-top:1px}
+  @media (prefers-reduced-motion:reduce){.chev{transition:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="kicker">Phase 0 · 1 종합 보고 · 2026-07-07 ~ 07-13</div>
+  <h1>문서만 있던 프로젝트 → 실제로 동작하는 앱</h1>
+  <div class="bar"><i class="p0"></i><i class="p1"></i></div>
+  <div class="barnote"><b>Phase 0 · 1 완료</b> (전체 6단계 중 2단계) · 다음은 Phase 2 (RAG)</div>
+
+  <div class="stats">
+    <div class="stat"><div class="v">16</div><div class="k">문서</div></div>
+    <div class="stat"><div class="v">404</div><div class="k">코드 줄<br>(제한 500)</div></div>
+    <div class="stat"><div class="v">7</div><div class="k">DB 테이블<br>(설계 14)</div></div>
+    <div class="stat"><div class="v">25</div><div class="k">테스트<br>전부 통과</div></div>
+    <div class="stat"><div class="v">26</div><div class="k">커밋</div></div>
+  </div>
+
+  <ul id="list"></ul>
+</div>
+<script>
+  var SECS=[
+    {chip:"done",label:"Phase 0 — 설계·규칙 고정",sub:"07-07~09",
+     desc:"코드를 짜기 전에 '무엇을 만들고 무엇을 안 만들지'를 문서로 못 박았습니다. 코드는 0줄 — 의도적입니다.",
+     rows:[
+      ["Day 1 · 작업공간 · PRD","MVP 포함/제외 범위 확정, GitHub 연결, 비밀정보 차단"],
+      ["Day 2 · 코딩 에이전트 규칙","CLAUDE.md + 아키텍처·연구데이터·의료안전 규칙 3종"],
+      ["Day 3 · 데이터 정의","14개 테이블 · 13개 이벤트. 화면보다 데이터를 먼저"],
+      ["Day 4 · 판단 규칙","넛지 트리거·반복제한 / RAG 근거 3단계 / 안전 5범주"],
+      ["Day 5 · 백로그·검수","작업 분해 · 결정 기록 · 비용 · 역순 접근 · 일관성 검수 통과"]
+     ]},
+    {chip:"done",label:"Phase 1 — 웹앱·DB 골격",sub:"07-13",
+     desc:"'껍데기'를 만들지 않았습니다. 버튼만 있는 화면 대신, 하나의 기능을 데이터→로직→화면까지 관통시켜 완성했습니다.",
+     rows:[
+      ["환경·DB 연결","Python 3.12 · Supabase(서울) · 라이브러리 4개만"],
+      ["스키마 생성 (7개 테이블)","전 테이블 외부 접근 차단(RLS). 안 쓰는 테이블은 안 만듦"],
+      ["T1.1 참여자 코드 → 세션","새로고침 5회에도 세션 1행 유지 · 테스트 8/8"],
+      ["T1.3 채팅 화면","대화를 DB에서 복원 → 새로고침해도 남아있음 · 테스트 7/7"],
+      ["⭐ T1.4 시간대 넛지","AI가 먼저 말을 검. 승인 템플릿 5종 · 하루 3회 · 테스트 10/10"],
+      ["데모 배포","Streamlit Cloud(무료·비공개) · push하면 자동 반영"]
+     ]},
+    {chip:"done",label:"연구팀 피드백 반영",sub:"8건",
+     desc:"동료 연구자·교수님의 피드백이 실제로 설계를 바꿨습니다.",
+     rows:[
+      ["⭐ 검색 기록 정규화","배열로는 '청크별 검색빈도·유사도 분포' 분석이 불가능 → retrieval_chunks 신설"],
+      ["수집 우선 원칙","이번에 분석 안 해도 추후 위해 최소 수집 (단, 위치 등은 동의 전 미수집)"],
+      ["역순 접근","최소 결과물(분석 목표)부터 정의하고 거기서 필요한 결정을 도출"],
+      ["안전 과다 트리거 방지","보류·안전안내가 남발되지 않게 근거 3단계 · 고위험 범주를 좁게"],
+      ["간식·야식 넛지 추가","혈당 변동에 직결 → 템플릿 5종으로 확장 (야식은 죄책감 없는 문구)"],
+      ["중복 컬럼·인덱스 누락","sessions.app_version 제거 / events.session_id 인덱스 추가"],
+      ["관리자 대시보드","공동연구자가 비개발자 + 학교 공유 필요 → MVP 범위에 추가(T4.9)"]
+     ]},
+    {chip:"done",label:"개발 중 발견해 고친 문제",sub:"정직 기록",
+     desc:"문서 검수만으로는 못 잡고, 코드로 옮기면서 드러난 모순들. 이것이 문서를 계속 갱신하는 이유입니다.",
+     rows:[
+      ["문서끼리 모순","'app_opened는 인증 전에도 발생' vs '참여자 ID 필수' → 둘 다 만족 불가. 인증 전 기록 허용으로 결정 (덕분에 '앱 열고 코드 미입력 이탈' 분석 가능)"],
+      ["규칙 지키려니 테이블이 더 필요","'모든 이벤트에 시스템 버전' 규칙 → system_versions 테이블 추가"],
+      ["500줄 기준이 모호","전체 574줄 vs 실제코드 332줄 → '주석 제외' 기준으로 확정 (설명은 유지)"],
+      ["앱 오류의 진짜 원인","technical_errors 로그로 특정 — 코드 버그가 아니라 서버가 옛 모듈을 붙들고 있었음"],
+      ["테스트 자체의 오류","'안녕하세요'가 명령형 금지어에 오탐 / 행 수 대신 '규칙이 실제로 막는지'를 검증하도록 재작성"]
+     ]},
+    {chip:"next",label:"Phase 2 — RAG (다음)",sub:"착수 조건 2가지",
+     desc:"아래 두 가지가 준비되면 즉시 착수합니다.",
+     rows:[
+      ["1. 승인 문서 2~3종","연구팀 선정 완료 — 착수 시 전달 예정"],
+      ["2. LLM·임베딩 API 계정","⚠️ 임베딩은 별도 제공사 필요 (답변용 AI와 다름)"],
+      ["할 일","pgvector 활성화 → 문서 청킹·임베딩 → 검색 → 근거 기반 답변 + 출처 표시"],
+      ["💰 예상 비용","참여자 20명·12주·1일 3질문 기준, 최고 성능 모델도 연구 전체 10만원대"]
+     ]}
+  ];
+  var list=document.getElementById("list");
+  SECS.forEach(function(s,i){
+    var li=document.createElement("li");
+    li.className="sec"+(i===1?" open":"");
+    li.innerHTML=
+      '<button class="s-btn" aria-expanded="'+(i===1)+'">'+
+        '<span class="chip '+s.chip+'">'+(s.chip==="done"?"완료":"다음")+'</span>'+
+        '<span class="s-title">'+s.label+'<span class="s-sub">'+s.sub+'</span></span>'+
+        '<span class="chev">&#9654;</span>'+
+      '</button>'+
+      '<div class="body"><p>'+s.desc+'</p><div class="rows">'+
+        s.rows.map(function(r){
+          return '<div class="row"><span class="b"></span><span class="t">'+r[0]+
+                 (r[1]?'<small>'+r[1]+'</small>':'')+'</span></div>';
+        }).join("")+
+      '</div></div>';
+    var btn=li.querySelector(".s-btn");
+    btn.addEventListener("click",function(){
+      var open=li.classList.toggle("open");
+      btn.setAttribute("aria-expanded",open);
+    });
+    list.appendChild(li);
+  });
+</script>
+</body>
+</html>
