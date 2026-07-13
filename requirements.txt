@@ -4,3 +4,4 @@
 streamlit==1.59.2        # 반응형 웹 화면 (app.py)
 supabase==2.31.0         # Supabase 저장·조회 + pgvector 검색 (database.py)
 python-dotenv==1.2.2     # .env에서 비밀정보 로딩 (config.py) — 키를 코드에 넣지 않기 위함
+watchdog==6.0.0          # Streamlit이 코드 변경을 제대로 감지하도록 (없으면 옛 모듈을 붙들고 있어 오류)
