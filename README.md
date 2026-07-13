@@ -69,6 +69,8 @@
 | [DECISIONS.md](DECISIONS.md) | 기술 의사결정 기록 | ✅ v0.1 |
 | [PROGRESS.md](PROGRESS.md) | 진행 상태 · 일관성 검수 | ✅ v0.1 |
 | [docs/analysis-targets.md](docs/analysis-targets.md) | 최소 결과물(분석 목표) · 역순 접근 | ✅ v0.1 |
+| [docs/phase0-1-report.md](docs/phase0-1-report.md) | **Phase 0·1 종합 작업 보고서** (공유용) | ✅ |
+| [DEPLOY.md](DEPLOY.md) | 데모 배포 절차 · 접근 제한 | ✅ v0.1 |
 | [.claude/rules/](.claude/rules/) | 아키텍처 · 연구데이터 · 의료안전 세부 규칙 | ✅ v0.1 |
 
 ## 폴더 구조
