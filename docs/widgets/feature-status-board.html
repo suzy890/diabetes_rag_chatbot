@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>기능 현황판</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#ffffff; --ink:#1b2430; --soft:#55606d; --faint:#8b95a1;
+    --line:#e2e6ea; --accent:#1f6f78; --accent-bg:#e4f0f0;
+    --done:#2f7d4f; --done-bg:#e5f1e9; --next:#b9701f; --next-bg:#f6ecdd;
+    --later:#6b7683; --later-bg:#edeff1;
+    --shadow:0 1px 2px rgba(20,30,45,.06);
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#10161d; --card:#182029; --ink:#e8ecf0; --soft:#aab4c0; --faint:#7c8896;
+      --line:#28323d; --accent:#4fb6bf; --accent-bg:#15303220;
+      --done:#5aa877; --done-bg:#16261c; --next:#d59a51; --next-bg:#2a220f;
+      --later:#8b95a1; --later-bg:#1f272f; --shadow:none;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    font-family:"Pretendard",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Segoe UI",system-ui,sans-serif;
+    background:var(--bg); color:var(--ink); line-height:1.55; padding:18px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .app{max-width:760px;margin:0 auto}
+  .kicker{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:6px}
+  h1{font-size:19px;font-weight:800;margin:0 0 4px;letter-spacing:-.01em}
+  .sub{font-size:12.5px;color:var(--soft);margin:0 0 16px}
+  .tabs{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px}
+  .tab{font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;color:var(--soft);
+    background:var(--card);border:1px solid var(--line);border-radius:99px;padding:7px 13px;
+    display:flex;align-items:center;gap:7px;transition:all .15s ease}
+  .tab:hover{border-color:var(--faint)}
+  .tab[aria-selected="true"]{color:#fff;border-color:transparent}
+  .tab.t-done[aria-selected="true"]{background:var(--done)}
+  .tab.t-next[aria-selected="true"]{background:var(--next)}
+  .tab.t-later[aria-selected="true"]{background:var(--later)}
+  .tab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .tab .n{font-size:11px;opacity:.75}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;box-shadow:var(--shadow)}
+  .panel .desc{font-size:12.5px;color:var(--faint);margin:0 0 13px;padding-bottom:11px;border-bottom:1px dashed var(--line)}
+  ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:11px}
+  li{display:flex;gap:11px;align-items:flex-start}
+  .mk{flex:none;width:20px;height:20px;border-radius:6px;display:flex;align-items:center;justify-content:center;
+    font-size:11px;font-weight:800;margin-top:1px}
+  .t-done .mk{background:var(--done-bg);color:var(--done)}
+  .t-next .mk{background:var(--next-bg);color:var(--next)}
+  .t-later .mk{background:var(--later-bg);color:var(--later)}
+  .txt{font-size:13.5px;color:var(--ink);line-height:1.5}
+  .txt small{display:block;color:var(--soft);font-size:12px;margin-top:2px}
+  .note{margin-top:16px;font-size:12.5px;color:var(--soft);background:var(--accent-bg);border-radius:10px;padding:12px 14px}
+  .note b{color:var(--ink)}
+  @media (prefers-reduced-motion:reduce){.tab{transition:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="kicker">데모 · 2026-07-13 기준</div>
+  <h1>지금 되는 것 / 아직 안 되는 것</h1>
+  <p class="sub">데모를 눌러보시기 전에 확인해 주세요. <b>답변이 안 나오는 건 고장이 아니라 아직 안 만든 것</b>입니다.</p>
+  <div class="tabs" id="tabs" role="tablist"></div>
+  <div class="panel" id="panel"></div>
+  <div class="note">
+    <b>화면이 단순한 건 의도입니다.</b> 겉모습(버튼·디자인)보다 <b>데이터가 정확히 쌓이는지</b>를 먼저 만들고 있습니다.
+    고령친화적 화면 다듬기는 마지막 단계(Phase 4)에서 합니다.
+  </div>
+</div>
+<script>
+  var CATS=[
+    {key:"done",cls:"t-done",icon:"✅",label:"지금 되는 것",mark:"✓",
+     desc:"데모에서 직접 눌러보실 수 있습니다. 모든 기록은 연구 데이터로 저장됩니다.",
+     items:[
+      ["참여자 코드로 입장","P001을 입력하면 들어갑니다. 등록 안 된 코드는 막힙니다."],
+      ["접속 세션 기록","언제 들어와 얼마나 머물렀는지 저장됩니다."],
+      ["⭐ 시간대별 식사 넛지","AI가 먼저 말을 겁니다. 아침(6–10) / 점심(11–14) / 간식(14–17) / 저녁(17–20) / 야식(21시~)"],
+      ["넛지 응답 저장","'네, 먹었어요 / 아니요 / 나중에 답할게요' 선택이 기록됩니다."],
+      ["자유 메시지 입력·저장","입력한 메시지가 저장되고, 새로고침해도 대화가 남아있습니다."],
+      ["반복 제한","같은 넛지는 하루 1회, 하루 최대 3회까지만 뜹니다."]
+     ]},
+    {key:"next",cls:"t-next",icon:"🔜",label:"다음 단계 (Phase 2)",mark:"→",
+     desc:"바로 다음에 만들 것. 승인 문서와 AI API 계정이 준비되면 착수합니다.",
+     items:[
+      ["⭐ AI 답변 (RAG)","질문해도 아직 답이 안 옵니다 — 정상입니다. 승인된 당뇨 문서를 검색해 근거 기반으로 답하는 기능을 붙일 예정입니다."],
+      ["출처 표시","답변에 '△△ 가이드 12쪽' 같은 근거를 함께 보여줍니다."],
+      ["근거 부족 시 답변 보류","자료에 없으면 추측하지 않고 '근거를 못 찾았다'고 안내합니다."],
+      ["위험 질문 안전 처리","복약 용량 변경·진단 요청 등은 전문가 상담을 권고합니다."],
+      ["API 비용 기록","질문마다 토큰·비용을 저장해 연구비를 추적합니다."]
+     ]},
+    {key:"later",cls:"t-later",icon:"⏳",label:"이후 예정",mark:"·",
+     desc:"MVP 범위 안에 있지만 나중에 만들 것들.",
+     items:[
+      ["행동 수행 확인 (종단 추적)","'하겠다'고 한 행동을 나중에 실제로 했는지 다시 묻습니다. (Phase 3)"],
+      ["운동·복약·혈당 넛지","현재는 식사 영역만. 이후 확장합니다. (Phase 3)"],
+      ["고령친화 화면 다듬기","큰 글씨·큰 버튼·쉬운 문장. (Phase 4)"],
+      ["연구 데이터 CSV 추출","연구자가 분석용으로 내려받습니다. (Phase 4)"],
+      ["범위 밖 (안 만듦)","외부 알림(문자·카카오·푸시), 날씨 기반 넛지, 네이티브 앱 — MVP에서 제외."]
+     ]}
+  ];
+  var tabsEl=document.getElementById("tabs"), panelEl=document.getElementById("panel");
+  function render(i){
+    var c=CATS[i];
+    Array.prototype.forEach.call(tabsEl.children,function(b,j){b.setAttribute("aria-selected",j===i)});
+    panelEl.className="panel "+c.cls;
+    panelEl.innerHTML='<p class="desc">'+c.desc+'</p><ul>'+
+      c.items.map(function(it){
+        return '<li><span class="mk">'+c.mark+'</span><span class="txt">'+it[0]+
+               (it[1]?'<small>'+it[1]+'</small>':'')+'</span></li>';
+      }).join("")+'</ul>';
+  }
+  CATS.forEach(function(c,i){
+    var b=document.createElement("button");
+    b.className="tab "+c.cls; b.setAttribute("role","tab");
+    b.innerHTML='<span>'+c.icon+'</span>'+c.label+'<span class="n">'+c.items.length+'</span>';
+    b.addEventListener("click",function(){render(i)});
+    tabsEl.appendChild(b);
+  });
+  render(0);
+</script>
+</body>
+</html>
