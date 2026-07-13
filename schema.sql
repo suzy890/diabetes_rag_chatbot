@@ -1,15 +1,14 @@
--- schema.sql — 연구 데이터 테이블 정의
+-- schema.sql — 연구 데이터 테이블 정의 (현재 DB 상태와 일치)
 -- 근거: DATA_SCHEMA.md · EVENT_DICTIONARY.md · .claude/rules/research-data.md
 -- Phase 1(첫 슬라이스)에 필요한 최소 테이블만 생성한다. 나머지는 해당 기능을 만들 때 추가.
 --
 -- 보안: 모든 테이블에 RLS를 켜고 정책을 만들지 않는다
 --       → 외부(anon/authenticated)는 읽기·쓰기 모두 차단.
---       → 우리 앱 서버가 쓰는 secret 키(service_role)만 RLS를 우회해 기록 가능.
---       → 연구 데이터에 외부에서 가짜 데이터를 넣을 수 없다.
+--       → 앱 서버가 쓰는 secret 키(service_role)만 RLS를 우회해 기록 가능.
 
 -- ─────────────────────────────────────────────────────────────
 -- 1. system_versions — 어떤 설정으로 중재했는지 추적 (연구 재현성)
---    모든 연구 이벤트가 이 버전을 참조한다 (research-data.md 필수 규칙)
+--    모든 연구 이벤트가 이 버전을 참조한다.
 -- ─────────────────────────────────────────────────────────────
 create table if not exists system_versions (
     system_version_id      uuid primary key default gen_random_uuid(),
@@ -27,6 +26,8 @@ create table if not exists system_versions (
 
 -- ─────────────────────────────────────────────────────────────
 -- 2. participants — 연구 참여자 (익명 ID만. 직접식별정보 저장 금지)
+--    participant_id를 PK로 두는 이유: 연구 코드는 한 번 부여하면 바뀌지 않고,
+--    CSV로 내보낼 때 사람이 읽을 수 있어야 분석이 편하다.
 -- ─────────────────────────────────────────────────────────────
 create table if not exists participants (
     participant_id    text        primary key,           -- 예: 'P001'
@@ -41,6 +42,8 @@ create table if not exists participants (
 
 -- ─────────────────────────────────────────────────────────────
 -- 3. sessions — 한 번의 접속 (시작~종료)
+--    app_version 컬럼은 두지 않는다: 웹앱은 '기기에 설치된 버전'이 없으므로
+--    system_version_id 로 앱 버전을 알 수 있다 (중복·불일치 방지).
 -- ─────────────────────────────────────────────────────────────
 create table if not exists sessions (
     session_id        uuid        primary key default gen_random_uuid(),
@@ -49,8 +52,9 @@ create table if not exists sessions (
     started_at        timestamptz not null default now(),
     ended_at          timestamptz,
     device_type       text        check (device_type in ('mobile', 'tablet', 'desktop')),
-    app_version       text        not null,
-    completion_status text        check (completion_status in ('normal', 'interrupted', 'error'))
+    completion_status text        check (completion_status in ('normal', 'interrupted', 'error')),
+    -- events가 (session_id, participant_id) 복합 FK를 걸 수 있도록 하는 대상 키
+    constraint sessions_session_participant_uniq unique (session_id, participant_id)
 );
 
 create index if not exists idx_sessions_participant on sessions (participant_id, started_at);
@@ -58,8 +62,8 @@ create index if not exists idx_sessions_participant on sessions (participant_id,
 -- ─────────────────────────────────────────────────────────────
 -- 4. events — 행동 이벤트 시간순 로그 (EVENT_DICTIONARY.md의 event_type)
 --    participant_id / session_id 가 nullable 인 이유:
---    app_opened 는 참여자 코드 입력 '전'에도 발생하므로(EVENT_DICTIONARY),
---    그 시점엔 참여자·세션을 아직 알 수 없다. 인증 이후 이벤트는 항상 값이 채워진다.
+--    app_opened 는 참여자 코드 입력 '전'에도 발생하므로 그 시점엔 참여자·세션을 알 수 없다.
+--    인증 이후 이벤트는 항상 두 값이 채워진다.
 -- ─────────────────────────────────────────────────────────────
 create table if not exists events (
     event_id           uuid        primary key default gen_random_uuid(),
@@ -69,10 +73,17 @@ create table if not exists events (
     event_type         text        not null,
     occurred_at        timestamptz not null default now(),
     related_message_id uuid,                                -- messages 테이블 생성 후 FK 추가
-    payload_json       jsonb
+    payload_json       jsonb,
+    -- 참여자·세션 일관성을 DB가 원천 보장한다.
+    -- ("P001의 세션인데 이벤트는 P002" 저장 불가)
+    -- 둘 중 하나가 NULL이면(인증 전 app_opened) 검사를 건너뛴다.
+    constraint events_session_participant_fk
+        foreign key (session_id, participant_id)
+        references sessions (session_id, participant_id)
 );
 
 create index if not exists idx_events_participant_time on events (participant_id, occurred_at);
+create index if not exists idx_events_session on events (session_id);
 create index if not exists idx_events_type on events (event_type);
 
 -- ─────────────────────────────────────────────────────────────

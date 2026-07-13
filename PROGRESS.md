@@ -9,7 +9,7 @@
 - 시스템 구조도 · 데이터 관계 구조도 · 기능별 데이터 흐름도 (설계 기록)
 - MVP 범위 정의 / 디지털 넛지 구현 범위 정의
 - 프로젝트 문서: README · PRD · CLAUDE + `.claude/rules/`(architecture·research-data·medical-safety)
-- 데이터 스키마 문서화 (DATA_SCHEMA — 13개 테이블) + **수집 우선 원칙**
+- 데이터 스키마 문서화 (DATA_SCHEMA — 14개 테이블) + **수집 우선 원칙**
 - 이벤트 사전 (EVENT_DICTIONARY — 13개 이벤트)
 - 넛지·RAG·안전 규칙 (NUDGE_RULES · RAG_RULES · SAFETY_RULES)
 - 백로그·의사결정·비용·분석목표 (TASKS · DECISIONS · COST_PLAN · analysis-targets)

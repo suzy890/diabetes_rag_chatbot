@@ -53,7 +53,7 @@
 | [README.md](README.md) | 프로젝트 개요 | ✅ v0.1 |
 | [PRD.md](PRD.md) | 제품 · 연구 요구사항, MVP 범위 | ✅ v0.1 |
 | [CLAUDE.md](CLAUDE.md) | 코딩 에이전트 최상위 규칙 | ✅ v0.1 |
-| [DATA_SCHEMA.md](DATA_SCHEMA.md) | 테이블 · 필드 정의 (13개) | ✅ v0.1 |
+| [DATA_SCHEMA.md](DATA_SCHEMA.md) | 테이블 · 필드 정의 (14개) | ✅ v0.1 |
 | [EVENT_DICTIONARY.md](EVENT_DICTIONARY.md) | 이벤트 이름 · 의미 (13개) | ✅ v0.1 |
 | [NUDGE_RULES.md](NUDGE_RULES.md) | 넛지 유형 · 트리거 · 반복 제한 | ✅ v0.1 |
 | [RAG_RULES.md](RAG_RULES.md) | 검색 · 답변 원칙 | ✅ v0.1 |

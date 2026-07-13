@@ -42,7 +42,8 @@
 participants (참여자)
 ├──< sessions (접속 세션)
 │      ├──< messages (대화 메시지)
-│      │      ├── retrieval_logs (RAG 검색 기록)
+│      │      ├── retrieval_logs (RAG 검색 1회)
+│      │      │      └──< retrieval_chunks (검색된 청크 1개당 1행)
 │      │      └── model_calls (외부 API 호출)
 │      ├──< events (행동 이벤트)
 │      └──< technical_errors (기술 오류)
@@ -51,7 +52,7 @@ participants (참여자)
 └──< measurements (설문·측정)
 
 documents (원문)
-└──< document_chunks (문서 청크)   ←── retrieval_logs 가 참조
+└──< document_chunks (문서 청크)   ←── retrieval_chunks 가 참조
 
 system_versions (시스템 버전)  ──→ sessions · messages · events · nudge_events · retrieval_logs 등에 연결
 ```
@@ -91,16 +92,17 @@ system_versions (시스템 버전)  ──→ sessions · messages · events · 
 |------|------|--------|
 | `session_id` | 세션 고유 ID | PK · 필수 |
 | `participant_id` | 참여자 연결 | FK · 필수 |
+| `system_version_id` | 당시 시스템 버전 | FK · 필수 |
 | `started_at` | 접속 시작 시각 | 필수 |
 | `ended_at` | 접속 종료 시각 | 선택 |
 | `device_type` | mobile / tablet / desktop | 선택 |
-| `app_version` | 사용 당시 웹앱 버전 | 필수 |
 | `completion_status` | 정상종료 / 중단 / 오류 | 선택 |
 
 - **연결:** participants(부모) → messages, events, technical_errors (1:다)
 - **분석 의미:** 참여 빈도, 세션 길이, 기기 유형별 사용 차이.
 - **개인정보:** 없음.
 - **중복 방지:** 접속 1회당 1행. 새로고침(rerun)이 새 세션을 만들지 않도록 세션 식별을 유지.
+- **⚠️ `app_version` 컬럼 없음 (2026-07-13 결정):** 웹앱은 "기기에 설치된 앱 버전"이 존재하지 않는다(모두 같은 서버에 접속). 앱 버전은 `system_version_id`로 알 수 있으므로 별도 컬럼을 두면 **중복이자 불일치 위험**만 생긴다.
 
 ## 3. messages — 채팅창의 모든 메시지
 
@@ -205,6 +207,11 @@ system_versions (시스템 버전)  ──→ sessions · messages · events · 
 - **PK:** `retrieval_id` · **FK:** `question_message_id`, `answer_message_id`, (참조) `document_chunks`
 - **생성 시점:** RAG 검색이 수행될 때.
 
+> **⚠️ 구조 변경 (2026-07-13, 연구팀 리뷰 반영):** 검색된 청크를 **배열**(`retrieved_chunk_ids`, `similarity_scores`)로 담으면 분석이 매우 어렵다. ("이 청크가 몇 번 검색됐나?", "유사도 분포는?", "선택된 청크의 평균 순위는?" 모두 배열로는 고통스럽다.)
+> → **검색 1회 = `retrieval_logs` 1행**, **검색된 청크 1개 = `retrieval_chunks` 1행**으로 정규화한다. 이래야 [RAG_RULES.md](RAG_RULES.md)의 "검색 품질과 답변 품질을 분리 평가"가 실제로 가능하다.
+
+**7-1. `retrieval_logs` — 검색 1회의 메타정보**
+
 | 필드 | 의미 | 키/필수 |
 |------|------|--------|
 | `retrieval_id` | 검색 기록 ID | PK · 필수 |
@@ -212,17 +219,27 @@ system_versions (시스템 버전)  ──→ sessions · messages · events · 
 | `answer_message_id` | 답변 메시지 연결 | FK · 선택 |
 | `query_text` | 실제 검색에 사용한 질문 | 필수 |
 | `embedding_model` | 질문 임베딩 모델 | 필수 |
-| `retrieved_chunk_ids` | 처음 검색된 청크 목록 | 필수 |
-| `similarity_scores` | 각 청크 유사도 점수 | 필수 |
-| `selected_chunk_ids` | 답변에 실제 사용한 청크 | 선택 |
 | `top_k` | 검색 청크 수 | 필수 |
 | `knowledge_base_version` | 당시 지식베이스 버전 | 필수 |
+| `evidence_level` | 근거 충분성 판정: 충분 / 부분 / 부족 (RAG_RULES 3단계) | 필수 |
 | `retrieved_at` | 검색 시각 | 필수 |
 
-- **연결:** messages(질문/답변) · document_chunks(검색 결과)
-- **분석 의미:** 검색 품질과 답변 품질을 **분리 평가**.
+**7-2. `retrieval_chunks` — 검색된 청크 1개당 1행 (신설)**
+
+| 필드 | 의미 | 키/필수 |
+|------|------|--------|
+| `retrieval_chunk_id` | PK | PK · 필수 |
+| `retrieval_id` | 어느 검색인지 | FK · 필수 |
+| `chunk_id` | 어떤 청크인지 | FK · 필수 |
+| `rank` | 검색 순위 (1위, 2위 …) | 필수 |
+| `similarity_score` | 유사도 점수 | 필수 |
+| `was_selected` | 답변에 실제로 사용됐는지 | 필수 |
+
+- **연결:** retrieval_logs(부모) · document_chunks(참조) · messages(질문/답변)
+- **분석 의미:** 청크별 검색 빈도, 유사도 분포, 선택률, 순위별 채택률을 **SQL 한 줄로** 집계 가능. 오답이 검색 실패인지 생성 실패인지 구분.
 - **개인정보:** query_text에 식별정보 유입 주의.
-- **중복 방지:** 검색 1회당 1행.
+- **중복 방지:** 검색 1회당 retrieval_logs 1행 / (검색 × 청크)당 retrieval_chunks 1행.
+- **생성 시점:** Phase 2 (RAG 구현 시).
 
 ## 8. measurements — 설문·반복 측정값
 
