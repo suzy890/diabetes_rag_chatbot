@@ -116,7 +116,7 @@ system_versions (시스템 버전)  ──→ sessions · messages · events · 
 | `session_id` | 세션 연결 | FK · 필수 |
 | `participant_id` | 참여자 연결 | FK · 필수 |
 | `role` | user / assistant / system | 필수 |
-| `message_type` | nudge / nudge_response / rag_question / rag_answer / safety_message 등 | 필수 |
+| `message_type` | nudge / nudge_response / rag_question / rag_answer / safety_message / free_text / system_notice / **clarification_question** / **clarification_response** | 필수 |
 | `content` | 실제 메시지 내용 | 필수 |
 | `created_at` | 생성 시각 | 필수 |
 | `system_version_id` | 당시 시스템 버전 | FK · 필수 |
@@ -354,6 +354,7 @@ system_versions (시스템 버전)  ──→ sessions · messages · events · 
 | `nudge_rule_version` | 넛지 규칙 버전 | 필수 |
 | `safety_rule_version` | 안전 규칙 버전 | 필수 |
 | `knowledge_base_version` | 지식베이스 버전 | 필수 |
+| `term_dictionary_version` | **승인 용어 사전 버전** (2026-07-14 추가) — 어떤 용어사전으로 중재했는지 추적 | 선택 |
 | `activated_at` | 적용 시작 시각 | 필수 |
 | `deactivated_at` | 적용 종료 시각 | 선택 |
 | `change_note` | 변경 내용 | 선택 |

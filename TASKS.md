@@ -86,10 +86,22 @@
 - [ ] **T2.2 문서 텍스트 추출·전처리** — 원문에서 텍스트 추출. 파일: (스크립트)/rag.py
 - [ ] **T2.3 청킹** — 의미 단위 분할 + 토큰 수. 파일: rag.py. _단위 미결정_
 - [ ] **T2.4 임베딩·벡터 저장** — 임베딩 API 호출→`document_chunks` 저장, `model_calls` 기록. 파일: rag.py, database.py
-- [ ] **T2.5 검색 테스트** — 질문 임베딩→pgvector 검색→`retrieval_logs`. 파일: rag.py, database.py
+- [ ] **T2.5 검색 테스트** — 질문 임베딩→pgvector 검색→`retrieval_logs`+`retrieval_chunks`. 파일: rag.py, database.py
 - [ ] **T2.6 근거 기반 답변 생성** — 3단계 충분성 판단→답변. 파일: rag.py
 - [ ] **T2.7 출처 표시** — 답변에 출처·`source_clicked` 이벤트. 파일: app.py
 - [ ] **T2.8 비용 로그** — 모든 호출 토큰·단가·비용 `model_calls` 저장. 파일: database.py
+- [ ] **T2.9 하이브리드 검색** — 벡터 + 키워드(pg_trgm/전문검색). 한국어 의료 용어("당화혈색소")는 정확 매칭이 중요. 파일: database.py
+- [ ] **T2.10 용어 모호성 되묻기** ⭐ (2026-07-14 추가) — 승인 용어 사전 적용 + 모호 시 되묻기
+  - **목적:** 고령 참여자의 "혈당"이 공복혈당인지 당화혈색소인지 **추측하지 않고 되묻는다** (안전)
+  - **동시에 연구 관측:** 참여자가 두 지표를 구분하는지, "모르겠다" 비율은 얼마인지 → **AI 건강문해력 직접 관측치**
+  - **완료 기준:** ① 모호성이 답을 바꿀 때만 되묻는다(남발 금지) ② "모르겠다" 선택 시 추측 없이 의료진 권고 ③ `clarification_asked`/`clarification_answered` 기록 ④ 같은 세션 같은 용어는 1회만
+  - **파일:** rag.py, app.py, database.py · **선행:** 용어 사전 **의료전문가 검토**
+  - **근거:** [RAG_RULES.md](RAG_RULES.md) §3-1 · [prompts/term-aliases.md](prompts/term-aliases.md)
+
+> **Phase 2 스키마 변경 (착수 시 일괄 승인 필요):**
+> pgvector 활성화 · `documents` · `document_chunks` · `retrieval_logs` · `retrieval_chunks` · `model_calls` 생성
+> · `messages.message_type` CHECK에 `clarification_question`/`clarification_response` 추가
+> · `system_versions`에 `term_dictionary_version` 추가
 
 ---
 
