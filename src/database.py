@@ -269,3 +269,51 @@ def log_model_call(
     if related_message_id:
         row["related_message_id"] = related_message_id
     get_client().table("model_calls").insert(row).execute()
+
+
+def search_chunks(query_embedding: list[float], top_k: int = 5) -> list[dict]:
+    """질문 벡터로 가장 가까운 활성 청크 top-k를 찾는다 (pgvector 검색 함수 호출).
+    각 결과: chunk_id·document_id·content·page_number·similarity(코사인, 1이 가장 가까움).
+    """
+    vec = "[" + ",".join(repr(x) for x in query_embedding) + "]"
+    return get_client().rpc(
+        "match_document_chunks", {"query_embedding": vec, "match_count": top_k}
+    ).execute().data
+
+
+def save_retrieval_log(
+    session_id: str,
+    participant_id: str,
+    question_message_id: str,
+    system_version_id: str,
+    query_text: str,
+    embedding_model: str,
+    top_k: int,
+    knowledge_base_version: str,
+    evidence_level: str | None = None,
+    answer_message_id: str | None = None,
+) -> str:
+    """검색 1회를 retrieval_logs에 1행 저장하고 retrieval_id를 돌려준다 (D15)."""
+    row: dict[str, Any] = {
+        "session_id": session_id, "participant_id": participant_id,
+        "question_message_id": question_message_id, "system_version_id": system_version_id,
+        "query_text": query_text, "embedding_model": embedding_model, "top_k": top_k,
+        "knowledge_base_version": knowledge_base_version, "evidence_level": evidence_level,
+    }
+    if answer_message_id:
+        row["answer_message_id"] = answer_message_id
+    return get_client().table("retrieval_logs").insert(row).execute().data[0]["retrieval_id"]
+
+
+def save_retrieval_chunks(retrieval_id: str, ranked: list[dict],
+                          selected_ids: set[str] | None = None) -> int:
+    """검색된 청크를 청크당 1행으로 저장한다 (순위·유사도·채택여부, D15)."""
+    selected = selected_ids or set()
+    rows = [{
+        "retrieval_id": retrieval_id, "chunk_id": r["chunk_id"], "rank": i + 1,
+        "similarity_score": r.get("similarity"),
+        "was_selected": r["chunk_id"] in selected,
+    } for i, r in enumerate(ranked)]
+    if not rows:
+        return 0
+    return len(get_client().table("retrieval_chunks").insert(rows).execute().data)

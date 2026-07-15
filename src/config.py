@@ -31,6 +31,14 @@ def _read_secret(name: str) -> str:
 SUPABASE_URL = _read_secret("SUPABASE_URL")
 SUPABASE_KEY = _read_secret("SUPABASE_KEY")
 
+# 외부 LLM·임베딩 (NVIDIA NIM — 키 1개로 둘 다, D29/D32). OpenAI 호환 엔드포인트.
+NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
+LLM_API_KEY = _read_secret("LLM_API_KEY").strip().strip('"').strip("'")
+LLM_MODEL = "nvidia/nemotron-3-ultra-550b-a55b"
+EMBED_MODEL = "nvidia/llama-nemotron-embed-1b-v2"
+# 문서 청크를 임베딩한 버전 — 질문도 같은 모델로 임베딩해야 검색이 된다.
+EMBED_VERSION = "nemotron-2048-basic512-clean-v1"
+
 # 모든 연구 데이터에 기록할 버전값 (research-data.md 규칙)
 APP_VERSION = "0.1.0"
 

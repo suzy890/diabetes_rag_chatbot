@@ -309,3 +309,28 @@ alter table document_chunks  enable row level security;
 alter table model_calls      enable row level security;
 alter table retrieval_logs   enable row level security;
 alter table retrieval_chunks enable row level security;
+
+-- ─────────────────────────────────────────────────────────────
+-- 검색 함수 (T2.5) — 마이그레이션 match_document_chunks_fn 로 적용됨.
+-- 질문 벡터와 가장 가까운 활성 청크 top-k를 코사인 유사도로 돌려준다.
+-- (2048차원이라 벡터 인덱스 없이 전수 스캔 — 소규모 코퍼스라 충분)
+-- ─────────────────────────────────────────────────────────────
+create or replace function match_document_chunks(
+    query_embedding extensions.vector(2048),
+    match_count int default 5
+)
+returns table (
+    chunk_id uuid,
+    document_id uuid,
+    content text,
+    page_number int,
+    similarity double precision
+)
+language sql stable as $$
+    select c.chunk_id, c.document_id, c.content, c.page_number,
+           1 - (c.embedding <=> query_embedding) as similarity
+    from document_chunks c
+    where c.is_active
+    order by c.embedding <=> query_embedding
+    limit match_count;
+$$;
