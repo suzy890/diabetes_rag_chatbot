@@ -43,6 +43,11 @@
 | D29 | **LLM·임베딩 제공사 = NVIDIA NIM (키 1개)** (2026-07-14) | 연구팀이 제공한 계정. `integrate.api.nvidia.com`은 **OpenAI 호환 엔드포인트**라 표준 방식으로 호출된다. **같은 키로 LLM과 임베딩을 모두 쓸 수 있어** 제공사·계정·비용 관리가 하나로 단순해진다(당초 우려했던 "임베딩 별도 제공사" 문제 해소). 실제 호출로 검증 완료 → [tests/check_llm_provider.py](tests/check_llm_provider.py) |
 | D30 | **연구용 호출은 `temperature`를 낮게 고정** (2026-07-14) | 제공받은 예시 코드는 `temperature=1`(창의적 샘플링)이었다. 그러면 **같은 질문에 참여자마다 다른 답**이 나와 ① 중재가 표준화되지 않고 ② 재현성이 무너진다. 넛지를 승인 템플릿으로 고정한 이유(D6)와 동일한 논리. 근거 기반 답변에 필요한 것은 창의성이 아니라 **일관성**이다. |
 | D31 | **시스템 프롬프트에서 '검색된 근거에 없는 수치'를 금지** (2026-07-14) | 검증 중 모델이 묻지도 않은 **임상 수치("6.5% 이상이면 당뇨병")를 스스로 생성**했다. 정확한 값이었지만 **출처 없는 답변**이며, 이는 D27(사전에 수치 금지)이 막으려던 문제와 같다. 근거 문서에 없는 수치·기준은 말하지 않도록 프롬프트에 명시한다. |
+| D32 | **임베딩 모델 = `nvidia/llama-nemotron-embed-1b-v2` (2048차원)** (2026-07-14) | 사용 가능한 3종을 **고령 구어체 질문 10개로 실제 검색**시켜 비교했다 → [tests/check_embedding_models.py](tests/check_embedding_models.py). 결과: nemotron-embed **Top-1 100%**, nv-embed-v1 90%(4096차원·4.7배 느림), **nv-embedqa-e5-v5 10%**. ⚠️ **당초 "첫 후보"였던 e5-v5는 한국어를 사실상 이해하지 못한다**(1등·2등 점수차 0.005 = 모든 문서가 똑같아 보임). 같은 코드로 **영어 질문은 정상 동작**해 코드 문제가 아닌 **모델의 한국어 미지원**임을 확인했다. → `document_chunks`의 벡터 컬럼은 **`vector(2048)`** 으로 만든다. |
+| D33 | **bge-m3 대신 nemotron 임베딩 확정 — 실제 문서로 재검증** (2026-07-15) | 연구팀이 문서를 bge-m3(1024차원)로 미리 임베딩해 와, nemotron과 비교 검토했다. bge-m3는 한국어 검색이 강하지만 **API가 아닌 로컬 2GB 모델**이라 질문 실시간 임베딩·Streamlit 배포에 부담(메모리)이 크다. nemotron을 **실제 승인문서 139청크 + 고령 구어체 질문 12개**로 재검증 → [tests/check_nemotron_realdocs.py](tests/check_nemotron_realdocs.py): **Top-1 58% · Recall@3 75% · Recall@5 92%**. Top-1이 낮은 원인은 **모델의 한국어 문제가 아니라 청크 잡음**(머리말·쪽번호·목차·참고문헌이 본문에 섞여 그 청크가 1등을 차지)임을 오답 분석으로 확인. → 임베딩은 nemotron 확정, **다음 레버는 청크 정제(T2.3)·크기 선택·하이브리드 검색(T2.9)**. |
+| D34 | **Phase 2 RAG 테이블 5종 적용** (2026-07-15) | 마이그레이션 `phase2_rag_tables`로 `documents`·`document_chunks`(vector 2048)·`model_calls`·`retrieval_logs`·`retrieval_chunks` 생성. 기존 7테이블과 동일하게 **RLS 켜고 정책 없음**. **pgvector ANN 인덱스는 2000차원까지만** 지원해 2048 벡터엔 벡터 인덱스를 만들지 않음(전수 코사인 검색 = 정확도 손실 없음, 현재 소규모 코퍼스엔 충분). 규모가 커지면 `halfvec(2048)` 캐스팅으로 HNSW 가능. `schema.sql` 동기화 완료. |
+| D36 | **500줄 제한은 로직 5개 모듈에만 적용, database.py는 별도 상한 250** (2026-07-15) | database.py가 13개 테이블의 DB 접근을 담당하며 목표(60~80)의 3배(226줄)로 커졌다. 하지만 500줄 규칙의 **목적은 "로직을 단순하게" 해서 비개발자가 읽게 하는 것**이고, DB 배관은 로직이 아니라 테이블 수에 비례하는 기계적 코드다. → 500은 **app·rag·nudge·safety·config** 5개에만 적용하고, database.py는 **단독 상한 250**으로 따로 관리. **1회성 시딩 DB 쓰기**(register_document·insert_document_chunks·count_chunks)는 코어 밖 [scripts/ingest_db.py](scripts/ingest_db.py)로 이동(실행 앱의 DB 접근은 여전히 database.py). 개정 후: 로직 234/500·database 195/250. `tests/check_line_limit.py`가 둘을 나눠 검사. |
+| D35 | **청크 정제 + 청킹 조합 = basic_512** (2026-07-15) | 실제 문서에서 Top-1이 낮았던 원인이 임베딩이 아니라 **청크 잡음**(머리말·쪽번호·"구분(시간) 슬라이드"·워터마크)임을 확인 → 정규식 정제(`clean()`) 도입. 6개 조합(basic/page/document × 256/512)을 **내용 기반 정답 판정**으로 실측 비교 → [tests/compare_chunking.py](tests/compare_chunking.py). **basic_512 선정**: Recall@5 **100%**·Top-1 75%·MRR 0.85. **정제만으로 Top-1 58%→75%, R@5 92%→100%.** 정제 후 빈 조각(표지·목차)은 저장에서 제외. 저장은 정제본, 임베딩 버전 `nemotron-2048-basic512-clean-v1`. → 다음 개선 여지는 하이브리드 검색(T2.9, 정확 숫자·용어 매칭)·Top-1 상향. |
 
 ---
 
@@ -60,7 +65,7 @@
 | ~~U6~~ | ~~넛지 하루 허용 횟수~~ | ✅ **하루 3회 확정** (D20) |
 | U7 | 행동 수행 재확인 시점 | Phase 3 |
 | U8 | 횡단·종단 설문과 측정시점 | 결과물 정의와 직결 |
-| ~~U9~~ | ~~사용할 LLM·임베딩 모델~~ | ✅ **NVIDIA NIM 확정** (D29). LLM=`nvidia/nemotron-3-ultra-550b-a55b`. 임베딩 모델(3종 중 택1)은 **한국어 검색 성능 비교 후 Phase 2에서 확정** |
+| ~~U9~~ | ~~사용할 LLM·임베딩 모델~~ | ✅ **전부 확정.** 제공사=NVIDIA NIM (D29) · LLM=`nvidia/nemotron-3-ultra-550b-a55b` · 임베딩=`nvidia/llama-nemotron-embed-1b-v2` **2048차원** (D32, 한국어 검색 비교 완료) |
 | U13 | **NVIDIA API 단가·데이터 보관 정책** | 비용 재산정([COST_PLAN.md](COST_PLAN.md))과 **IRB 문구(U10)**에 모두 필요. 무료 티어가 입력을 학습에 쓰는지 확인 필요 |
 | U14 | **API 키 재발급** | 현재 키는 채팅에 노출된 적이 있어 **실증 전 폐기·재발급** 필요 |
 | U10 | 외부 API 전송·보관 IRB 문구 | IRB |

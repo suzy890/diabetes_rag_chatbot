@@ -84,11 +84,12 @@
 
 각 작업 공통: 완료 기준=지정 데이터가 저장되고 재현 가능 / 테스트=샘플 질문으로 확인 / 의존=직전 작업.
 
-- [ ] **T2.0 임베딩 모델 선정** (2026-07-14 추가) — 사용 가능한 3종(`nv-embedqa-e5-v5` 1024 / `llama-nemotron-embed-1b-v2` 2048 / `nv-embed-v1` 4096) 중 **한국어 검색 성능을 비교**해 확정. 고령 구어체 질문이 정답 청크를 찾는지로 판정. **벡터 차원이 `document_chunks` 컬럼 크기를 결정하므로 테이블 생성보다 먼저 한다.**
-- [ ] **T2.1 승인 문서 등록** — `documents` 등록(제목·기관·연도·버전·승인상태). 파일: database.py, schema.sql
-- [ ] **T2.2 문서 텍스트 추출·전처리** — 원문에서 텍스트 추출. 파일: (스크립트)/rag.py
-- [ ] **T2.3 청킹** — 의미 단위 분할 + 토큰 수. 파일: rag.py. _단위 미결정_
-- [ ] **T2.4 임베딩·벡터 저장** — 임베딩 API 호출→`document_chunks` 저장, `model_calls` 기록. 파일: rag.py, database.py
+- [x] **T2.0 임베딩 모델 선정** ✅ **완료 (2026-07-14)** — 3종을 고령 구어체 질문 10개로 실제 검색 비교 → **`nvidia/llama-nemotron-embed-1b-v2` (2048차원) 확정** (Top-1 100%). `nv-embedqa-e5-v5`는 한국어 Top-1 **10%**로 탈락. **→ `document_chunks`는 `vector(2048)`.** 검증: [tests/check_embedding_models.py](tests/check_embedding_models.py) · 근거: D32
+- [x] **T2.0b 실제 문서 재검증 + 스키마 적용** ✅ **완료 (2026-07-15)** — 연구팀이 bge-m3(1024)로 미리 임베딩해 왔으나, 배포 부담(로컬 2GB)으로 nemotron 유지. 실제 문서 139청크로 재검증 → **Top-1 58%·Recall@5 92%** (오답 원인=청크 잡음, 모델 아님). 검증: [tests/check_nemotron_realdocs.py](tests/check_nemotron_realdocs.py). 마이그레이션 `phase2_rag_tables`로 **테이블 5종 적용**(RLS 켬·벡터 인덱스 없음), `schema.sql` 동기화. 근거: D33·D34
+- [x] **T2.1 승인 문서 등록** ✅ **완료 (2026-07-15)** — 승인 문서 4개를 `documents`에 등록(멱등). `database.register_document()` + [scripts/seed_documents.py](scripts/seed_documents.py). 65세용 자료는 발행정보 미상(추후 확인). 표준교육자료는 청크명(DMhmenu)과 PDF명(DMmenu) 상이 — T2.4에서 매핑 주의.
+- [x] **T2.2 문서 텍스트 추출·전처리** ✅ **완료 (2026-07-15)** — 연구팀 파이프라인이 4개 PDF에서 한글 텍스트 추출(스캔본 아님·깨짐 없음 확인). 반복 잡음(머리말·쪽번호·워터마크) 제거 정제 규칙 작성 → `tests/compare_chunking.py`의 `clean()`.
+- [x] **T2.3 청킹** ✅ **완료 (2026-07-15)** — 여러 크기·전략(basic/page/document, 256/512)을 **정제 적용 후 실측 비교** → [tests/compare_chunking.py](tests/compare_chunking.py). **basic_512 선정**(Recall@5 100%·Top-1 75%·MRR 0.85). 정제만으로 Top-1 58%→75%. 근거: D35
+- [x] **T2.4 임베딩·벡터 저장** ✅ **완료 (2026-07-15)** — basic_512 정제 청크 **135개를 nemotron 임베딩→`document_chunks` 저장(vector 2048 확인)**, `model_calls` 4건 기록(52,679토큰). `database.insert_document_chunks/log_model_call` + [scripts/embed_chunks.py](scripts/embed_chunks.py). 임베딩 버전 `nemotron-2048-basic512-clean-v1`.
 - [ ] **T2.5 검색 테스트** — 질문 임베딩→pgvector 검색→`retrieval_logs`+`retrieval_chunks`. 파일: rag.py, database.py
 - [ ] **T2.6 근거 기반 답변 생성** — 3단계 충분성 판단→답변. 파일: rag.py
 - [ ] **T2.7 출처 표시** — 답변에 출처·`source_clicked` 이벤트. 파일: app.py

@@ -238,3 +238,34 @@ def log_technical_error(
         get_client().table("technical_errors").insert(row).execute()
     except Exception:
         pass
+
+
+def list_documents() -> list[dict]:
+    """등록된 문서 목록을 돌려준다 (출처 표시·매핑 등 실행 앱에서 사용)."""
+    return get_client().table("documents").select("*").execute().data
+
+
+def log_model_call(
+    call_type: str,
+    system_version_id: str,
+    provider: str | None = None,
+    model_name: str | None = None,
+    input_tokens: int | None = None,
+    output_tokens: int | None = None,
+    latency_ms: int | None = None,
+    status: str = "success",
+    participant_id: str | None = None,
+    related_message_id: str | None = None,
+) -> None:
+    """외부 API 호출의 토큰·지연시간·상태를 model_calls에 남긴다 (비용 추적)."""
+    row: dict[str, Any] = {
+        "call_type": call_type, "system_version_id": system_version_id,
+        "provider": provider, "model_name": model_name,
+        "input_tokens": input_tokens, "output_tokens": output_tokens,
+        "latency_ms": latency_ms, "status": status,
+    }
+    if participant_id:
+        row["participant_id"] = participant_id
+    if related_message_id:
+        row["related_message_id"] = related_message_id
+    get_client().table("model_calls").insert(row).execute()
