@@ -7,6 +7,7 @@
 - 답변은 검색된 근거 범위 안에서만 하고, 근거에 없는 수치는 말하지 않는다 (D31).
 """
 
+import re
 import time
 from functools import lru_cache
 from pathlib import Path
@@ -15,6 +16,10 @@ import httpx
 
 import config
 import database
+
+# 키워드 추출 시 떼어낼 흔한 조사 (긴 것부터 — "으로"를 "로"보다 먼저 검사)
+_JOSA = ("으로", "에서", "에게", "까지", "부터", "이나", "라고", "은", "는", "이", "가",
+         "을", "를", "의", "에", "도", "만", "과", "와", "로")
 
 # 근거 부족(보류) 시 고정 안내문. ⚠️ 문구는 의료전문가 검토 대상 (SAFETY_RULES).
 INSUFFICIENT_MSG = (
@@ -62,8 +67,31 @@ def embed_query(
     return vec
 
 
+def extract_keywords(text: str) -> list[str]:
+    """질문에서 정확 매칭용 키워드를 뽑는다 (하이브리드 검색용).
+
+    3글자 이상 토큰만 쓰고, 흔한 조사를 떼어낸 어간도 함께 넣는다.
+    예: "당화혈색소가" → "당화혈색소가"와 "당화혈색소" 둘 다 → 문서의 "당화혈색소는"과도 매칭.
+    """
+    terms: set[str] = set()
+    for tok in re.findall(r"[가-힣A-Za-z0-9]+", text):
+        if len(tok) < 3:  # 짧은 토큰은 조사·불용어일 가능성이 커서 버린다
+            continue
+        terms.add(tok)
+        for josa in _JOSA:
+            if tok.endswith(josa) and len(tok) - len(josa) >= 2:
+                terms.add(tok[:-len(josa)])
+                break
+    return list(terms)
+
+
 def judge_evidence(chunks: list[dict]) -> str:
-    """최상위 청크 유사도로 근거 충분성을 3단계로 가른다 (RAG_RULES §3)."""
+    """최상위 청크의 코사인 유사도로 근거 충분성을 3단계로 가른다 (RAG_RULES §3).
+
+    검색은 하이브리드(벡터+키워드)로 하되, 근거 '충분성' 판단은 보정된 코사인
+    유사도로 한다. 융합 점수로 판단하면 임계값(코사인 기준)과 어긋나 보류가 흔들린다.
+    → 검색 품질과 판단 임계값의 정합은 파일럿 튜닝 대상(U4).
+    """
     if not chunks:
         return "insufficient"
     top = chunks[0].get("similarity", 0.0)
@@ -89,7 +117,8 @@ def retrieve(
     top_k = top_k or config.RAG_TOP_K
     sysver = database.get_active_system_version_id()
     vec = embed_query(query_text, participant_id, question_message_id, sysver)
-    chunks = database.search_chunks(vec, top_k)
+    # 하이브리드: 벡터 유사도 + 질문 속 정확 용어("당화혈색소" 등) 키워드 매칭 (T2.9)
+    chunks = database.hybrid_search(vec, extract_keywords(query_text), top_k)
     level = judge_evidence(chunks)
     # 근거가 '부족'이면 아무것도 선택하지 않는다(보류). 아니면 하한 이상 상위 N개.
     selected = ([] if level == "insufficient" else

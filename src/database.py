@@ -281,6 +281,19 @@ def search_chunks(query_embedding: list[float], top_k: int = 5) -> list[dict]:
     ).execute().data
 
 
+def hybrid_search(query_embedding: list[float], keywords: list[str],
+                  top_k: int = 5, vec_weight: float = 0.7) -> list[dict]:
+    """벡터 유사도 + 키워드 일치를 합쳐 청크를 찾는다 (하이브리드, T2.9).
+    각 결과에 similarity(코사인, 근거 판단용)와 score(융합, 정렬용)가 함께 온다.
+    keywords가 비면 벡터 검색과 동일하게 동작한다.
+    """
+    vec = "[" + ",".join(repr(x) for x in query_embedding) + "]"
+    return get_client().rpc("hybrid_match_chunks", {
+        "query_embedding": vec, "keywords": keywords,
+        "match_count": top_k, "vec_weight": vec_weight,
+    }).execute().data
+
+
 def save_retrieval_log(
     session_id: str,
     participant_id: str,

@@ -334,3 +334,46 @@ language sql stable as $$
     order by c.embedding <=> query_embedding
     limit match_count;
 $$;
+
+-- ─────────────────────────────────────────────────────────────
+-- 하이브리드 검색 (T2.9) — 마이그레이션 hybrid_match_chunks_idf 로 적용됨.
+-- 벡터 코사인 + 정확 키워드 일치(IDF 가중: 흔한 단어는 거의 0, 희귀 용어는 큰 가중).
+-- similarity(순수 코사인)는 근거 충분성 판단용, score(융합)는 정렬용으로 함께 반환.
+-- ─────────────────────────────────────────────────────────────
+create or replace function hybrid_match_chunks(
+    query_embedding extensions.vector(2048),
+    keywords text[],
+    match_count int default 5,
+    vec_weight float default 0.7
+)
+returns table (
+    chunk_id uuid,
+    document_id uuid,
+    content text,
+    page_number int,
+    similarity double precision,
+    keyword_hits int,
+    score double precision
+)
+language sql stable as $$
+    with kw as (
+        select k,
+               (select count(*) from document_chunks c2
+                where c2.is_active and c2.content ilike '%' || k || '%') as df
+        from unnest(keywords) k
+    ),
+    scored as (
+        select c.chunk_id, c.document_id, c.content, c.page_number,
+               1 - (c.embedding <=> query_embedding) as similarity,
+               (select count(*) from kw where c.content ilike '%' || kw.k || '%')::int as keyword_hits,
+               coalesce((select sum(1.0 / (1 + kw.df)) from kw
+                         where c.content ilike '%' || kw.k || '%'), 0) as kw_score
+        from document_chunks c
+        where c.is_active
+    )
+    select chunk_id, document_id, content, page_number, similarity, keyword_hits,
+           vec_weight * similarity + (1 - vec_weight) * least(kw_score, 1.0) as score
+    from scored
+    order by score desc
+    limit match_count;
+$$;

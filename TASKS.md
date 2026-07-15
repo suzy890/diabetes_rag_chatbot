@@ -94,7 +94,7 @@
 - [x] **T2.6 근거 기반 답변 생성** ✅ **완료 (2026-07-15)** — 3단계 충분성 판단(충분≥0.45/부분/부족<0.30, 잠정·U4)→근거 기반 답변. 부족이면 LLM 미호출·고정 보류문. 시스템 프롬프트로 D31(근거외 수치 금지)·D30(temp 0.2)·안전(진단/처방/복약 금지) 강제 → [prompts/rag_answer_system.md](prompts/rag_answer_system.md). `rag.judge_evidence/generate_answer/respond`, `database.update_retrieval_answer`. 검증: [tests/check_answer.py](tests/check_answer.py) — "3개월마다"는 근거대로, 김치찌개는 안전 거절.
 - [x] **T2.7 출처 표시** ✅ **완료 (2026-07-15)** — 답변 아래 "📚 근거 보기" 접이식에 문서·쪽 표시, 출처 클릭 시 `source_clicked` 이벤트(payload=제목·쪽, 답변메시지 연결). `app.render_sources` + `rag.respond`가 sources 반환. RAG를 채팅 흐름에 연결(질문=rag_question→respond→답변 표시).
 - [x] **T2.8 비용 로그** ✅ **완료 (2026-07-15)** — 모든 외부 호출(document_embedding·query_embedding·rag_answer)의 토큰·지연시간·상태를 `model_calls`에 기록(`database.log_model_call`). ⚠️ 단가·estimated_cost 환산은 NVIDIA 단가 확정(U13) 후 채운다.
-- [ ] **T2.9 하이브리드 검색** — 벡터 + 키워드(pg_trgm/전문검색). 한국어 의료 용어("당화혈색소")는 정확 매칭이 중요. 파일: database.py
+- [x] **T2.9 하이브리드 검색** ✅ **완료 (2026-07-16)** — 벡터 코사인 + 정확 키워드 **IDF 가중**(흔한 단어≈0, 희귀 용어 큰 가중). 검색 함수 `hybrid_match_chunks`, `database.hybrid_search`, `rag.extract_keywords`(조사 제거). 순진한 동일가중 하이브리드는 오히려 악화돼(흔한 단어 노이즈) IDF로 교정 → "저혈당" 케이스 정확 답변 개선. **근거 충분성 판단은 코사인 유지**(융합 score와 임계값 정합은 U4 튜닝). 근거: D37
 - [ ] **T2.10 용어 모호성 되묻기** ⭐ (2026-07-14 추가) — 승인 용어 사전 적용 + 모호 시 되묻기
   - **목적:** 고령 참여자의 "혈당"이 공복혈당인지 당화혈색소인지 **추측하지 않고 되묻는다** (안전)
   - **동시에 연구 관측:** 참여자가 두 지표를 구분하는지, "모르겠다" 비율은 얼마인지 → **AI 건강문해력 직접 관측치**
