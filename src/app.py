@@ -8,6 +8,7 @@ import streamlit as st
 
 import database
 import nudge
+import rag
 
 st.set_page_config(page_title="당뇨 건강 도우미", page_icon="💙")
 
@@ -148,6 +149,20 @@ def render_nudge_options(participant_id: str, session_id: str) -> None:
         st.rerun()
 
 
+def render_sources(message: dict, sources: list[dict],
+                   participant_id: str, session_id: str) -> None:
+    """답변 아래에 근거 출처를 접이식으로 보여준다. 출처를 열면 source_clicked를 기록한다(T2.7)."""
+    with st.expander("📚 이 답변의 근거 보기"):
+        for i, s in enumerate(sources):
+            label = f"{s['title']} {s.get('page') or ''}쪽".strip()
+            if st.button(label, key=f"src_{message['message_id']}_{i}"):
+                database.log_event(
+                    "source_clicked", participant_id, session_id,
+                    payload={"title": s["title"], "page": s.get("page")},
+                    related_message_id=message["message_id"],
+                )
+
+
 def render_chat() -> None:
     participant_id = st.session_state["participant_id"]
     session_id = st.session_state["session_id"]
@@ -167,9 +182,13 @@ def render_chat() -> None:
         st.error("대화를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.")
         return
 
+    sources_by_msg = st.session_state.get("sources_by_msg", {})
     for message in messages:
         with st.chat_message(message["role"]):
             st.write(message["content"])
+            srcs = sources_by_msg.get(message.get("message_id"))
+            if srcs:
+                render_sources(message, srcs, participant_id, session_id)
 
     if not messages:
         st.info("아직 대화가 없습니다. 아래에 자유롭게 입력해 보세요.")
@@ -180,9 +199,10 @@ def render_chat() -> None:
     if not typed or not typed.strip():
         return
 
+    question = typed.strip()
     try:
         saved = database.save_message(
-            session_id, participant_id, "user", "free_text", typed.strip()
+            session_id, participant_id, "user", "rag_question", question
         )
         database.log_event(
             "question_asked", participant_id, session_id, related_message_id=saved["message_id"]
@@ -193,6 +213,15 @@ def render_chat() -> None:
         )
         st.error("메시지를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.")
         return
+
+    # 저장한 질문에 근거 기반 답변을 생성한다 (검색·판단·답변·로그는 rag가 담당).
+    try:
+        with st.spinner("근거를 찾고 있습니다…"):
+            result = rag.respond(question, session_id, participant_id, saved["message_id"])
+        st.session_state.setdefault("sources_by_msg", {})[result["answer_message_id"]] = result["sources"]
+    except Exception as exc:
+        database.log_technical_error("rag_failed", f"respond: {exc}", participant_id, session_id)
+        st.error("답변을 만드는 중 문제가 생겼습니다. 잠시 후 다시 시도해 주세요.")
 
     st.rerun()
 
