@@ -305,6 +305,13 @@ def save_retrieval_log(
     return get_client().table("retrieval_logs").insert(row).execute().data[0]["retrieval_id"]
 
 
+def update_retrieval_answer(retrieval_id: str, answer_message_id: str) -> None:
+    """검색 로그에 생성된 답변 메시지를 연결한다 (검색↔답변 연결, D15)."""
+    (get_client().table("retrieval_logs")
+     .update({"answer_message_id": answer_message_id})
+     .eq("retrieval_id", retrieval_id).execute())
+
+
 def save_retrieval_chunks(retrieval_id: str, ranked: list[dict],
                           selected_ids: set[str] | None = None) -> int:
     """검색된 청크를 청크당 1행으로 저장한다 (순위·유사도·채택여부, D15)."""

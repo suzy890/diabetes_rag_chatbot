@@ -39,6 +39,15 @@ EMBED_MODEL = "nvidia/llama-nemotron-embed-1b-v2"
 # 문서 청크를 임베딩한 버전 — 질문도 같은 모델로 임베딩해야 검색이 된다.
 EMBED_VERSION = "nemotron-2048-basic512-clean-v1"
 
+# 답변 생성 설정 (연구 표준화 — D30: 창의성보다 일관성)
+LLM_TEMPERATURE = 0.2
+# 근거 충분성 3단계 임계값 (RAG_RULES §3, 잠정값 — 파일럿에서 튜닝, U4)
+#   최상위 청크 유사도 ≥ 상한=충분 / 하한~상한=부분 / < 하한=부족(보류)
+EVIDENCE_UPPER = 0.45
+EVIDENCE_LOWER = 0.30
+RAG_TOP_K = 5          # 검색해 올 청크 수
+RAG_SELECT_N = 3       # 답변 생성에 실제로 넣을 상위 청크 수
+
 # 모든 연구 데이터에 기록할 버전값 (research-data.md 규칙)
 APP_VERSION = "0.1.0"
 

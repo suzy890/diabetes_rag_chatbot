@@ -91,7 +91,7 @@
 - [x] **T2.3 청킹** ✅ **완료 (2026-07-15)** — 여러 크기·전략(basic/page/document, 256/512)을 **정제 적용 후 실측 비교** → [tests/compare_chunking.py](tests/compare_chunking.py). **basic_512 선정**(Recall@5 100%·Top-1 75%·MRR 0.85). 정제만으로 Top-1 58%→75%. 근거: D35
 - [x] **T2.4 임베딩·벡터 저장** ✅ **완료 (2026-07-15)** — basic_512 정제 청크 **135개를 nemotron 임베딩→`document_chunks` 저장(vector 2048 확인)**, `model_calls` 4건 기록(52,679토큰). `database.insert_document_chunks/log_model_call` + [scripts/embed_chunks.py](scripts/embed_chunks.py). 임베딩 버전 `nemotron-2048-basic512-clean-v1`.
 - [x] **T2.5 검색** ✅ **완료 (2026-07-15)** — 질문 임베딩(nemotron query)→pgvector 검색 함수 `match_document_chunks`(코사인 top-k)→`retrieval_logs` 1행 + `retrieval_chunks` 청크당 1행 + `query_embedding` 비용 기록. 새 코드: `src/rag.py`(embed_query·retrieve), `database.search_chunks/save_retrieval_log/save_retrieval_chunks`, config에 NVIDIA 설정. 검증: [tests/check_search.py](tests/check_search.py) — 로그 규칙(D15) 통과.
-- [ ] **T2.6 근거 기반 답변 생성** — 3단계 충분성 판단→답변. 파일: rag.py
+- [x] **T2.6 근거 기반 답변 생성** ✅ **완료 (2026-07-15)** — 3단계 충분성 판단(충분≥0.45/부분/부족<0.30, 잠정·U4)→근거 기반 답변. 부족이면 LLM 미호출·고정 보류문. 시스템 프롬프트로 D31(근거외 수치 금지)·D30(temp 0.2)·안전(진단/처방/복약 금지) 강제 → [prompts/rag_answer_system.md](prompts/rag_answer_system.md). `rag.judge_evidence/generate_answer/respond`, `database.update_retrieval_answer`. 검증: [tests/check_answer.py](tests/check_answer.py) — "3개월마다"는 근거대로, 김치찌개는 안전 거절.
 - [ ] **T2.7 출처 표시** — 답변에 출처·`source_clicked` 이벤트. 파일: app.py
 - [ ] **T2.8 비용 로그** — 모든 호출 토큰·단가·비용 `model_calls` 저장. 파일: database.py
 - [ ] **T2.9 하이브리드 검색** — 벡터 + 키워드(pg_trgm/전문검색). 한국어 의료 용어("당화혈색소")는 정확 매칭이 중요. 파일: database.py
