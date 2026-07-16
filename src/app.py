@@ -117,72 +117,69 @@ def maybe_show_nudge(participant_id: str, session_id: str) -> None:
         )
 
 
+def _pick(options: list[str], key_prefix: str,
+          participant_id: str, session_id: str, message_type: str) -> str | None:
+    """선택지 버튼을 그려 클릭된 값을 돌려주고, 그 응답을 사용자 메시지로 저장한다.
+
+    아무것도 안 눌렀으면 None. 저장에 실패하면 오류를 알리고 None을 돌려준다(호출부가 멈춤).
+    넛지·행동제안·되묻기가 공유하는 '버튼 한 줄 + 응답 저장' 패턴을 한 곳에 모은다.
+    """
+    for column, option in zip(st.columns(len(options)), options):
+        if not column.button(option, key=f"{key_prefix}_{option}"):
+            continue
+        try:
+            database.save_message(session_id, participant_id, "user", message_type, option)
+            return option
+        except Exception as exc:
+            database.log_technical_error("db_insert_failed", f"{key_prefix}: {exc}",
+                                         participant_id, session_id)
+            st.error("응답을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.")
+            return None
+    return None
+
+
 def render_nudge_options(participant_id: str, session_id: str) -> None:
-    """답하지 않은 넛지가 있으면 선택지를 보여준다. 거절·나중에 선택지를 항상 포함한다."""
+    """답하지 않은 넛지가 있으면 선택지를 보여준다. 응답하면 이어서 행동 제안을 띄운다."""
     pending = database.get_unanswered_nudge(participant_id, session_id)
     if not pending:
         return
-
     options = st.session_state.get("nudge_options")
     if not options:
         template = next((t for t in nudge.TEMPLATES if t["key"] == pending["template_key"]), None)
         options = template["options"] if template else None
     if not options:
         return
-
-    columns = st.columns(len(options))
-    for column, option in zip(columns, options):
-        if not column.button(option, key=f"nudge_{pending['nudge_id']}_{option}"):
-            continue
-        try:
-            database.save_message(session_id, participant_id, "user", "nudge_response", option)
-            database.record_nudge_response(pending["nudge_id"], option)
-            database.log_event("nudge_answered", participant_id, session_id,
-                               payload={"response": option})
-        except Exception as exc:
-            database.log_technical_error(
-                "db_insert_failed", f"nudge_response: {exc}", participant_id, session_id
-            )
-            st.error("응답을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.")
-            return
-        st.session_state.pop("nudge_options", None)
-        # 넛지의 핵심 — 응답에 이어질 '작은 행동' 제안이 있으면 바로 이어서 보여준다.
-        followup = nudge.get_followup(pending["template_key"], option)
-        if followup:
-            amsg = database.save_message(session_id, participant_id, "assistant", "nudge", followup)
-            st.session_state["pending_action"] = {
-                "nudge_id": pending["nudge_id"], "action": followup,
-                "message_id": amsg["message_id"]}
-        st.rerun()
+    option = _pick(options, f"nudge_{pending['nudge_id']}", participant_id, session_id, "nudge_response")
+    if not option:
+        return
+    database.record_nudge_response(pending["nudge_id"], option)
+    database.log_event("nudge_answered", participant_id, session_id, payload={"response": option})
+    st.session_state.pop("nudge_options", None)
+    # 넛지의 핵심 — 응답에 이어질 '작은 행동' 제안이 있으면 바로 이어서 보여준다.
+    followup = nudge.get_followup(pending["template_key"], option)
+    if followup:
+        amsg = database.save_message(session_id, participant_id, "assistant", "nudge", followup)
+        st.session_state["pending_action"] = {
+            "nudge_id": pending["nudge_id"], "action": followup, "message_id": amsg["message_id"]}
+    st.rerun()
 
 
 def render_action_options(participant_id: str, session_id: str) -> None:
-    """행동 제안에 대한 약속 선택지를 보여준다.
-
-    '해볼게요'는 행동의도(action_commitment)로 기록한다 → 추후 수행 확인(Phase 3)의 출발점.
-    강요하지 않는다: '조금 있다/지금은 어려워요' 선택지를 함께 준다.
-    """
+    """행동 제안에 대한 약속 선택지. '해볼게요'는 행동의도로 기록(Phase 3 출발점). 강요하지 않는다."""
     pending = st.session_state.get("pending_action")
     if not pending:
         return
-    columns = st.columns(len(nudge.COMMIT_OPTIONS))
-    for column, option in zip(columns, nudge.COMMIT_OPTIONS):
-        if not column.button(option, key=f"action_{pending['message_id']}_{option}"):
-            continue
-        try:
-            database.save_message(session_id, participant_id, "user", "nudge_response", option)
-            if option == nudge.COMMIT_OPTIONS[0]:      # '좋아요, 해볼게요' = 행동 약속
-                database.set_action_commitment(pending["nudge_id"], pending["action"])
-                database.log_event("action_committed", participant_id, session_id,
-                                   payload={"action": pending["action"]},
-                                   related_message_id=pending["message_id"])
-        except Exception as exc:
-            database.log_technical_error("db_insert_failed", f"action_response: {exc}",
-                                         participant_id, session_id)
-            st.error("응답을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.")
-            return
-        st.session_state.pop("pending_action", None)
-        st.rerun()
+    option = _pick(nudge.COMMIT_OPTIONS, f"action_{pending['message_id']}",
+                   participant_id, session_id, "nudge_response")
+    if not option:
+        return
+    if option == nudge.COMMIT_OPTIONS[0]:      # '좋아요, 해볼게요' = 행동 약속
+        database.set_action_commitment(pending["nudge_id"], pending["action"])
+        database.log_event("action_committed", participant_id, session_id,
+                           payload={"action": pending["action"]},
+                           related_message_id=pending["message_id"])
+    st.session_state.pop("pending_action", None)
+    st.rerun()
 
 
 def render_sources(message: dict, sources: list[dict],
@@ -219,32 +216,24 @@ def render_clarification_options(participant_id: str, session_id: str) -> None:
     pending = st.session_state.get("clarify_pending")
     if not pending:
         return
-    columns = st.columns(len(pending["options"]))
-    for column, option in zip(columns, pending["options"]):
-        if not column.button(option, key=f"clarify_{pending['clarify_message_id']}_{option}"):
-            continue
-        try:
-            database.save_message(session_id, participant_id, "user", "clarification_response", option)
-            database.log_event("clarification_answered", participant_id, session_id,
-                               payload={"term": pending["term"], "selected": option},
-                               related_message_id=pending["clarify_message_id"])
-        except Exception as exc:
-            database.log_technical_error("db_insert_failed", f"clarify_response: {exc}",
-                                         participant_id, session_id)
-            st.error("응답을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.")
-            return
-        # 같은 세션 같은 용어는 다시 되묻지 않는다.
-        st.session_state.setdefault("clarified_terms", set()).add(pending["term"])
-        # 고른 개념을 검색어에 보태 답변을 생성한다.
-        if "당화혈색소" in option:
-            question = pending["question"] + " (당화혈색소)"
-        elif "모르겠" in option:
-            question = pending["question"]          # 추측 없이 일반 정보로
-        else:
-            question = pending["question"] + " (공복혈당 식후혈당)"
-        run_rag(question, participant_id, session_id, pending["question_message_id"])
-        st.session_state.pop("clarify_pending", None)
-        st.rerun()
+    option = _pick(pending["options"], f"clarify_{pending['clarify_message_id']}",
+                   participant_id, session_id, "clarification_response")
+    if not option:
+        return
+    database.log_event("clarification_answered", participant_id, session_id,
+                       payload={"term": pending["term"], "selected": option},
+                       related_message_id=pending["clarify_message_id"])
+    st.session_state.setdefault("clarified_terms", set()).add(pending["term"])  # 세션당 같은 용어 1회
+    # 고른 개념을 검색어에 보태 답변을 생성한다. '모르겠어요'는 추측 없이 일반 정보로.
+    if "당화혈색소" in option:
+        question = pending["question"] + " (당화혈색소)"
+    elif "모르겠" in option:
+        question = pending["question"]
+    else:
+        question = pending["question"] + " (공복혈당 식후혈당)"
+    run_rag(question, participant_id, session_id, pending["question_message_id"])
+    st.session_state.pop("clarify_pending", None)
+    st.rerun()
 
 
 def render_chat() -> None:
