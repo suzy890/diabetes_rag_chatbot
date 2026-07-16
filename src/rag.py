@@ -42,36 +42,48 @@ def _system_prompt() -> str:
     return text.split("-->", 1)[-1].strip()
 
 
+def _nvidia_call(path: str, payload: dict, call_type: str, system_version_id: str,
+                 participant_id: str | None = None, message_id: str | None = None) -> dict:
+    """NVIDIA API를 호출하고 토큰·지연·상태를 model_calls에 남긴다 (임베딩·답변 공통 배관).
+
+    성공하면 응답 본문(dict)을 돌려준다. 실패해도 비용 기록은 남기고 예외를 올린다.
+    """
+    started = time.perf_counter()
+    status, itok, otok = "success", 0, 0
+    try:
+        r = httpx.post(f"{config.NVIDIA_BASE_URL}/{path}",
+                       headers={"Authorization": f"Bearer {config.LLM_API_KEY}"},
+                       json=payload, timeout=90.0)
+        r.raise_for_status()
+        body = r.json()
+        usage = body.get("usage", {})
+        itok = usage.get("prompt_tokens") or usage.get("total_tokens", 0)
+        otok = usage.get("completion_tokens", 0)
+        return body
+    except Exception:
+        status = "failure"
+        raise
+    finally:
+        database.log_model_call(
+            call_type=call_type, system_version_id=system_version_id, provider="nvidia",
+            model_name=payload.get("model"), input_tokens=itok, output_tokens=otok,
+            latency_ms=int((time.perf_counter() - started) * 1000), status=status,
+            participant_id=participant_id, related_message_id=message_id)
+
+
 def embed_query(
     text: str,
     participant_id: str | None = None,
     question_message_id: str | None = None,
     system_version_id: str | None = None,
 ) -> list[float]:
-    """질문을 nemotron으로 임베딩한다. 성공·실패와 관계없이 비용을 model_calls에 남긴다."""
+    """질문을 nemotron으로 임베딩한다. 비용은 공통 배관이 model_calls에 남긴다."""
     sysver = system_version_id or database.get_active_system_version_id()
     payload = {"model": config.EMBED_MODEL, "input": [text],
                "encoding_format": "float", "input_type": "query", "truncate": "END"}
-    started = time.perf_counter()
-    status, tokens, vec = "success", 0, None
-    try:
-        r = httpx.post(f"{config.NVIDIA_BASE_URL}/embeddings",
-                       headers={"Authorization": f"Bearer {config.LLM_API_KEY}"},
-                       json=payload, timeout=60.0)
-        r.raise_for_status()
-        body = r.json()
-        vec = body["data"][0]["embedding"]
-        tokens = body.get("usage", {}).get("total_tokens", 0)
-    except Exception:
-        status = "failure"
-        raise
-    finally:
-        database.log_model_call(
-            call_type="query_embedding", system_version_id=sysver,
-            provider="nvidia", model_name=config.EMBED_MODEL, input_tokens=tokens,
-            latency_ms=int((time.perf_counter() - started) * 1000), status=status,
-            participant_id=participant_id, related_message_id=question_message_id)
-    return vec
+    body = _nvidia_call("embeddings", payload, "query_embedding", sysver,
+                        participant_id, question_message_id)
+    return body["data"][0]["embedding"]
 
 
 def extract_keywords(text: str) -> list[str]:
@@ -189,39 +201,17 @@ def generate_answer(
     ]
     payload = {"model": config.LLM_MODEL, "messages": messages,
                "temperature": config.LLM_TEMPERATURE, "max_tokens": 500}
-    started = time.perf_counter()
-    status, itok, otok, answer = "success", 0, 0, ""
-    try:
-        headers = {"Authorization": f"Bearer {config.LLM_API_KEY}"}
-        r = httpx.post(f"{config.NVIDIA_BASE_URL}/chat/completions",
-                       headers=headers, json=payload, timeout=90.0)
-        r.raise_for_status()
-        body = r.json()
+    body = _nvidia_call("chat/completions", payload, "rag_answer",
+                        system_version_id, participant_id, question_message_id)
+    answer = body["choices"][0]["message"]["content"].strip()
+    # 안전장치: 답변이 영어로 나오면 한국어로 한 번만 다시 요청한다(재요청도 비용이 기록됨).
+    if _mostly_english(answer):
+        payload["messages"] = messages + [
+            {"role": "assistant", "content": answer},
+            {"role": "user", "content": "방금 답변이 한국어가 아니었습니다. 같은 내용을 반드시 한국어로만 다시 답해 주세요."}]
+        body = _nvidia_call("chat/completions", payload, "rag_answer",
+                            system_version_id, participant_id, question_message_id)
         answer = body["choices"][0]["message"]["content"].strip()
-        usage = body.get("usage", {})
-        itok, otok = usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0)
-        # 안전장치: 답변이 영어로 나오면 한국어로 한 번만 다시 요청한다.
-        if _mostly_english(answer):
-            payload["messages"] = messages + [
-                {"role": "assistant", "content": answer},
-                {"role": "user", "content": "방금 답변이 한국어가 아니었습니다. 같은 내용을 반드시 한국어로만 다시 답해 주세요."}]
-            r = httpx.post(f"{config.NVIDIA_BASE_URL}/chat/completions",
-                           headers=headers, json=payload, timeout=90.0)
-            r.raise_for_status()
-            body = r.json()
-            answer = body["choices"][0]["message"]["content"].strip()
-            u2 = body.get("usage", {})
-            itok += u2.get("prompt_tokens", 0)
-            otok += u2.get("completion_tokens", 0)
-    except Exception:
-        status = "failure"
-        raise
-    finally:
-        database.log_model_call(
-            call_type="rag_answer", system_version_id=system_version_id,
-            provider="nvidia", model_name=config.LLM_MODEL, input_tokens=itok,
-            output_tokens=otok, latency_ms=int((time.perf_counter() - started) * 1000),
-            status=status, participant_id=participant_id, related_message_id=question_message_id)
     return answer
 
 
