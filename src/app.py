@@ -146,6 +146,42 @@ def render_nudge_options(participant_id: str, session_id: str) -> None:
             st.error("응답을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.")
             return
         st.session_state.pop("nudge_options", None)
+        # 넛지의 핵심 — 응답에 이어질 '작은 행동' 제안이 있으면 바로 이어서 보여준다.
+        followup = nudge.get_followup(pending["template_key"], option)
+        if followup:
+            amsg = database.save_message(session_id, participant_id, "assistant", "nudge", followup)
+            st.session_state["pending_action"] = {
+                "nudge_id": pending["nudge_id"], "action": followup,
+                "message_id": amsg["message_id"]}
+        st.rerun()
+
+
+def render_action_options(participant_id: str, session_id: str) -> None:
+    """행동 제안에 대한 약속 선택지를 보여준다.
+
+    '해볼게요'는 행동의도(action_commitment)로 기록한다 → 추후 수행 확인(Phase 3)의 출발점.
+    강요하지 않는다: '조금 있다/지금은 어려워요' 선택지를 함께 준다.
+    """
+    pending = st.session_state.get("pending_action")
+    if not pending:
+        return
+    columns = st.columns(len(nudge.COMMIT_OPTIONS))
+    for column, option in zip(columns, nudge.COMMIT_OPTIONS):
+        if not column.button(option, key=f"action_{pending['message_id']}_{option}"):
+            continue
+        try:
+            database.save_message(session_id, participant_id, "user", "nudge_response", option)
+            if option == nudge.COMMIT_OPTIONS[0]:      # '좋아요, 해볼게요' = 행동 약속
+                database.set_action_commitment(pending["nudge_id"], pending["action"])
+                database.log_event("action_committed", participant_id, session_id,
+                                   payload={"action": pending["action"]},
+                                   related_message_id=pending["message_id"])
+        except Exception as exc:
+            database.log_technical_error("db_insert_failed", f"action_response: {exc}",
+                                         participant_id, session_id)
+            st.error("응답을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.")
+            return
+        st.session_state.pop("pending_action", None)
         st.rerun()
 
 
@@ -242,6 +278,7 @@ def render_chat() -> None:
         st.info("아직 대화가 없습니다. 아래에 자유롭게 입력해 보세요.")
 
     render_nudge_options(participant_id, session_id)
+    render_action_options(participant_id, session_id)
     render_clarification_options(participant_id, session_id)
 
     typed = st.chat_input("메시지를 입력하세요")

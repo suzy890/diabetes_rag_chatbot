@@ -191,6 +191,16 @@ def create_nudge(
     return get_client().table("nudge_events").insert(row).execute().data[0]
 
 
+def set_action_commitment(nudge_id: str, action: str) -> None:
+    """넛지의 행동 제안에 참여자가 '하겠다'고 약속한 행동을 기록한다 (종단 추적의 출발점).
+
+    행동의도(하겠다)와 실제 수행(했다)을 분리 기록한다는 원칙에서, 여기는 '의도' 쪽이다.
+    (추후 확인은 Phase 3의 action_followups)
+    """
+    (get_client().table("nudge_events")
+     .update({"action_commitment": action}).eq("nudge_id", nudge_id).execute())
+
+
 def get_unanswered_nudge(participant_id: str, session_id: str) -> dict | None:
     """이 세션에서 노출됐지만 아직 답하지 않은 넛지. 새로고침해도 선택지가 살아있게 한다."""
     rows = (

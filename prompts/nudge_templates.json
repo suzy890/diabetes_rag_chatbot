@@ -1,0 +1,54 @@
+{
+  "_note": "넛지 승인 템플릿 (NUDGE_RULES.md §1-1). 문구를 바꾸면 template_version을 올린다. followups는 v0.2 제안 — 연구팀 확정 필요. 운동 제안은 '식후 가벼운 걷기' 수준의 일반 행동 상기까지만(의료 판단 금지).",
+  "template_version": "v0.2",
+  "max_per_day": 3,
+  "deferred_label": "나중에 답할게요",
+  "commit_options": ["좋아요, 해볼게요", "조금 있다 할게요", "지금은 어려워요"],
+  "templates": [
+    {
+      "key": "meal_breakfast", "start_hour": 6, "end_hour": 10,
+      "health_domain": "meal", "nudge_type": "choice",
+      "text": "안녕하세요. 오늘 아침 식사는 하셨어요?",
+      "options": ["네, 먹었어요", "아직이요", "나중에 답할게요"],
+      "followups": {
+        "네, 먹었어요": "아침 드시고 나서 잠깐 몸을 움직이면 혈당이 천천히 오르는 데 도움이 돼요. 10분 정도 가볍게 걸어보시는 건 어떠세요?"
+      }
+    },
+    {
+      "key": "meal_lunch", "start_hour": 11, "end_hour": 14,
+      "health_domain": "meal", "nudge_type": "choice",
+      "text": "점심 식사는 하셨어요?",
+      "options": ["네, 먹었어요", "아직이요", "나중에 답할게요"],
+      "followups": {
+        "네, 먹었어요": "식사 후에 잠깐 움직이면 혈당이 천천히 오르는 데 도움이 돼요. 10분 정도 가볍게 걸어보시는 건 어떠세요?"
+      }
+    },
+    {
+      "key": "snack_afternoon", "start_hour": 14, "end_hour": 17,
+      "health_domain": "meal", "nudge_type": "choice",
+      "text": "오후에 간식 드셨어요?",
+      "options": ["네, 먹었어요", "아니요", "나중에 답할게요"],
+      "followups": {
+        "네, 먹었어요": "간식 드셨군요. 잠깐 스트레칭을 하거나 가볍게 걸으면서 몸을 움직여 보는 건 어떠세요?"
+      }
+    },
+    {
+      "key": "meal_dinner", "start_hour": 17, "end_hour": 20,
+      "health_domain": "meal", "nudge_type": "choice",
+      "text": "저녁 식사는 하셨어요?",
+      "options": ["네, 먹었어요", "아직이요", "나중에 답할게요"],
+      "followups": {
+        "네, 먹었어요": "저녁 드신 뒤 가볍게 10분 정도 걸으면 혈당 관리에 도움이 돼요. 잠깐 움직여 보실래요?"
+      }
+    },
+    {
+      "key": "snack_late", "start_hour": 21, "end_hour": 24,
+      "health_domain": "meal", "nudge_type": "choice",
+      "text": "저녁 드신 뒤에 뭔가 더 드셨어요?",
+      "options": ["네, 먹었어요", "아니요", "나중에 답할게요"],
+      "followups": {
+        "네, 먹었어요": "그러셨군요. 주무시기 전에 제자리걷기를 10분 정도 해보시면 내일 아침 공복혈당에 도움이 될 수 있어요. 해보실래요?"
+      }
+    }
+  ]
+}

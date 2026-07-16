@@ -32,8 +32,19 @@ def at(hour: int) -> datetime:
 
 
 def reset_test_participant() -> None:
-    """P002의 넛지·메시지·이벤트를 비운다 (테스트를 반복 실행 가능하게)."""
+    """P002의 데이터를 비운다 (테스트를 반복 실행 가능하게).
+
+    Phase 2에서 model_calls·retrieval_*가 messages를 참조하므로,
+    FK 위반이 없도록 자식(참조) 테이블부터 지운다.
+    """
     client = database.get_client()
+    rids = [r["retrieval_id"] for r in
+            client.table("retrieval_logs").select("retrieval_id")
+            .eq("participant_id", PID).execute().data]
+    for rid in rids:
+        client.table("retrieval_chunks").delete().eq("retrieval_id", rid).execute()
+    client.table("retrieval_logs").delete().eq("participant_id", PID).execute()
+    client.table("model_calls").delete().eq("participant_id", PID).execute()
     client.table("nudge_events").delete().eq("participant_id", PID).execute()
     client.table("events").delete().eq("participant_id", PID).execute()
     client.table("messages").delete().eq("participant_id", PID).execute()

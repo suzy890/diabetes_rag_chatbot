@@ -5,53 +5,35 @@
 - 화면을 그리지 않는다. app.py가 결과를 받아 렌더링한다.
 """
 
+import json
 from datetime import datetime, time
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import database
 
-TEMPLATE_VERSION = "v0.1"
+# 승인 템플릿은 코드가 아니라 편집 가능한 데이터 파일에서 읽는다(연구자가 문구 수정·의료검토 용이).
+# 문구 원칙: 한 번에 하나 · 짧고 쉬움 · 제안형 · 죄책감/공포/강압 금지 · 거절·나중 선택지 제공.
+_DATA = json.loads((Path(__file__).resolve().parent.parent
+                    / "prompts" / "nudge_templates.json").read_text(encoding="utf-8"))
 
-# 하루 전체 넛지 최대 노출 횟수 (연구팀 확정: 3회)
-MAX_NUDGES_PER_DAY = 3
+TEMPLATE_VERSION = _DATA["template_version"]
+MAX_NUDGES_PER_DAY = _DATA["max_per_day"]      # 하루 전체 넛지 최대 노출 (연구팀 확정: 3회)
+DEFERRED = _DATA["deferred_label"]
+COMMIT_OPTIONS = _DATA["commit_options"]        # 행동 제안에 대한 약속 선택지
+TEMPLATES = _DATA["templates"]
 
-# 승인 템플릿 (연구팀 승인 v0.1 — 임의 수정 금지. 바꾸려면 TEMPLATE_VERSION을 올린다)
-# 문구 원칙: 한 번에 하나의 질문 · 짧고 쉬운 문장 · 제안형 · 죄책감/공포/강압 금지 · 거절·나중 선택지 제공
-DEFERRED = "나중에 답할게요"
 
-TEMPLATES = [
-    {
-        "key": "meal_breakfast", "start_hour": 6, "end_hour": 10,
-        "health_domain": "meal", "nudge_type": "choice",
-        "text": "안녕하세요. 오늘 아침 식사는 하셨어요?",
-        "options": ["네, 먹었어요", "아직이요", DEFERRED],
-    },
-    {
-        "key": "meal_lunch", "start_hour": 11, "end_hour": 14,
-        "health_domain": "meal", "nudge_type": "choice",
-        "text": "점심 식사는 하셨어요?",
-        "options": ["네, 먹었어요", "아직이요", DEFERRED],
-    },
-    {
-        "key": "snack_afternoon", "start_hour": 14, "end_hour": 17,
-        "health_domain": "meal", "nudge_type": "choice",
-        "text": "오후에 간식 드셨어요?",
-        "options": ["네, 먹었어요", "아니요", DEFERRED],
-    },
-    {
-        "key": "meal_dinner", "start_hour": 17, "end_hour": 20,
-        "health_domain": "meal", "nudge_type": "choice",
-        "text": "저녁 식사는 하셨어요?",
-        "options": ["네, 먹었어요", "아직이요", DEFERRED],
-    },
-    {
-        # 판단·훈계로 들리지 않도록 사실만 묻는다 (죄책감 유발 금지 규칙).
-        "key": "snack_late", "start_hour": 21, "end_hour": 24,
-        "health_domain": "meal", "nudge_type": "choice",
-        "text": "저녁 드신 뒤에 뭔가 더 드셨어요?",
-        "options": ["네, 먹었어요", "아니요", DEFERRED],
-    },
-]
+def get_followup(template_key: str, response: str) -> str | None:
+    """넛지 응답에 이어질 '행동 제안' 문구를 찾는다. 없으면 None (예: 거절·미완료 응답).
+
+    넛지의 핵심은 질문이 아니라 행동 유도다. 참여자가 먹었다고 하면
+    '식후 가볍게 걷기' 같은 작은 행동을 제안한다(운동요법 상기 수준, 의료 판단 금지).
+    """
+    template = next((t for t in TEMPLATES if t["key"] == template_key), None)
+    if not template:
+        return None
+    return template.get("followups", {}).get(response)
 
 
 def find_template(now: datetime) -> dict | None:

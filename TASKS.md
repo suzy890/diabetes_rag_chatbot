@@ -111,8 +111,8 @@
 
 ## Phase 3 — 넛지·종단 추적
 
-- [ ] **T3.1 식사·운동 넛지 유형 추가** — 템플릿·규칙 확장. 파일: nudge.py
-- [ ] **T3.2 행동 약속 저장** — `action_committed`→`action_followups`. 파일: nudge.py, database.py
+- [~] **T3.1 식사·운동 넛지 유형 추가** — 🔄 **일부 (2026-07-16)**: 식사 넛지에 **행동 제안(식후 걷기) followup** 추가. 승인 템플릿을 [prompts/nudge_templates.json](prompts/nudge_templates.json)으로 분리(v0.2). 문구 의료검토 대기. 파일: nudge.py
+- [~] **T3.2 행동 약속 저장** — 🔄 **일부 (2026-07-16)**: 행동 제안에 "해볼게요" 선택 시 `nudge_events.action_commitment` 기록 + `action_committed` 이벤트 (`database.set_action_commitment`, `app.render_action_options`). 남음: `action_followups` 테이블·추후 확인(T3.3). 근거: D39
 - [ ] **T3.3 추후 수행 확인** — 다음 접속 시 확인 질문→`action_completed`. 파일: nudge.py, app.py
 - [ ] **T3.4 참여자별 종단 이벤트 생성** — 시간순 이벤트 무결성 확인. 파일: database.py
 
