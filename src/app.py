@@ -163,6 +163,54 @@ def render_sources(message: dict, sources: list[dict],
                 )
 
 
+def run_rag(question: str, participant_id: str, session_id: str, question_message_id: str) -> None:
+    """질문에 근거 기반 답변을 생성하고, 출처를 화면 상태에 담는다. 실패는 기록만 하고 넘어간다."""
+    try:
+        with st.spinner("근거를 찾고 있습니다…"):
+            result = rag.respond(question, session_id, participant_id, question_message_id)
+        st.session_state.setdefault("sources_by_msg", {})[result["answer_message_id"]] = result["sources"]
+    except Exception as exc:
+        database.log_technical_error("rag_failed", f"respond: {exc}", participant_id, session_id)
+        st.error("답변을 만드는 중 문제가 생겼습니다. 잠시 후 다시 시도해 주세요.")
+
+
+def render_clarification_options(participant_id: str, session_id: str) -> None:
+    """되묻기가 걸려 있으면 선택지를 보여준다. 선택 시 답변을 이어서 생성한다(T2.10).
+
+    '잘 모르겠어요'는 추측 없이 일반 정보 + 의료진 권고로 간다.
+    나머지는 고른 개념(혈당/당화혈색소)을 검색어에 보태 근거를 좁힌다.
+    """
+    pending = st.session_state.get("clarify_pending")
+    if not pending:
+        return
+    columns = st.columns(len(pending["options"]))
+    for column, option in zip(columns, pending["options"]):
+        if not column.button(option, key=f"clarify_{pending['clarify_message_id']}_{option}"):
+            continue
+        try:
+            database.save_message(session_id, participant_id, "user", "clarification_response", option)
+            database.log_event("clarification_answered", participant_id, session_id,
+                               payload={"term": pending["term"], "selected": option},
+                               related_message_id=pending["clarify_message_id"])
+        except Exception as exc:
+            database.log_technical_error("db_insert_failed", f"clarify_response: {exc}",
+                                         participant_id, session_id)
+            st.error("응답을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.")
+            return
+        # 같은 세션 같은 용어는 다시 되묻지 않는다.
+        st.session_state.setdefault("clarified_terms", set()).add(pending["term"])
+        # 고른 개념을 검색어에 보태 답변을 생성한다.
+        if "당화혈색소" in option:
+            question = pending["question"] + " (당화혈색소)"
+        elif "모르겠" in option:
+            question = pending["question"]          # 추측 없이 일반 정보로
+        else:
+            question = pending["question"] + " (공복혈당 식후혈당)"
+        run_rag(question, participant_id, session_id, pending["question_message_id"])
+        st.session_state.pop("clarify_pending", None)
+        st.rerun()
+
+
 def render_chat() -> None:
     participant_id = st.session_state["participant_id"]
     session_id = st.session_state["session_id"]
@@ -194,6 +242,7 @@ def render_chat() -> None:
         st.info("아직 대화가 없습니다. 아래에 자유롭게 입력해 보세요.")
 
     render_nudge_options(participant_id, session_id)
+    render_clarification_options(participant_id, session_id)
 
     typed = st.chat_input("메시지를 입력하세요")
     if not typed or not typed.strip():
@@ -214,14 +263,21 @@ def render_chat() -> None:
         st.error("메시지를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.")
         return
 
-    # 저장한 질문에 근거 기반 답변을 생성한다 (검색·판단·답변·로그는 rag가 담당).
-    try:
-        with st.spinner("근거를 찾고 있습니다…"):
-            result = rag.respond(question, session_id, participant_id, saved["message_id"])
-        st.session_state.setdefault("sources_by_msg", {})[result["answer_message_id"]] = result["sources"]
-    except Exception as exc:
-        database.log_technical_error("rag_failed", f"respond: {exc}", participant_id, session_id)
-        st.error("답변을 만드는 중 문제가 생겼습니다. 잠시 후 다시 시도해 주세요.")
+    # 용어가 모호하면(예: '혈당'이 순간값인지 당화혈색소인지) 추측하지 않고 되묻는다 (T2.10).
+    clarify = rag.detect_clarification(question)
+    if clarify and clarify["term"] not in st.session_state.get("clarified_terms", set()):
+        cmsg = database.save_message(session_id, participant_id, "assistant",
+                                     "clarification_question",
+                                     "혈당이라고 하셨는데, 어떤 걸 말씀하시는 걸까요?")
+        database.log_event("clarification_asked", participant_id, session_id,
+                           payload={"term": clarify["term"], "options": clarify["options"],
+                                    "question_message_id": saved["message_id"]},
+                           related_message_id=cmsg["message_id"])
+        st.session_state["clarify_pending"] = {
+            "term": clarify["term"], "options": clarify["options"], "question": question,
+            "question_message_id": saved["message_id"], "clarify_message_id": cmsg["message_id"]}
+    else:
+        run_rag(question, participant_id, session_id, saved["message_id"])
 
     st.rerun()
 

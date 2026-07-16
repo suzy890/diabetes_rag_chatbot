@@ -28,6 +28,13 @@ INSUFFICIENT_MSG = (
 )
 
 
+def _mostly_english(text: str) -> bool:
+    """답변이 (한국어가 아니라) 영어로 나왔는지 판별한다. 추론 모델이 가끔 영어로 샌다."""
+    korean = len(re.findall(r"[가-힣]", text))
+    english = len(re.findall(r"[A-Za-z]", text))
+    return english > korean and korean < 10
+
+
 @lru_cache(maxsize=1)
 def _system_prompt() -> str:
     """답변 생성용 시스템 프롬프트를 파일에서 읽는다 (HTML 주석 헤더는 제외)."""
@@ -83,6 +90,33 @@ def extract_keywords(text: str) -> list[str]:
                 terms.add(tok[:-len(josa)])
                 break
     return list(terms)
+
+
+# 모호 용어 되묻기 규칙 (승인 용어 사전 §1-1, 잠정 — 의료검토 대기).
+# "혈당"은 순간 혈당(공복/식후)일 수도, 당화혈색소(3개월 평균)일 수도 있어 답이 달라진다.
+_CLARIFY_TERMS = ("혈당", "당수치", "당 수치")
+# 이미 구체적으로 특정된 표현이면 되묻지 않는다.
+_ALREADY_SPECIFIC = ("공복", "식후", "당화혈색소", "에이원씨", "a1c", "A1C")
+_ASKS_JUDGMENT = ("괜찮", "정상", "높은", "낮은", "위험", "괜찬")
+CLARIFY_OPTIONS = ["평소에 재시는 혈당", "병원에서 3개월마다 재는 수치 (당화혈색소)", "잘 모르겠어요"]
+
+
+def detect_clarification(query_text: str) -> dict | None:
+    """질문이 '되물어야 하는 모호함'을 담고 있는지 규칙으로 판별한다 (RAG_RULES §3-1).
+
+    되묻는 경우: '혈당'류 표현 + (수치가 있거나 '괜찮은지'를 물음) → 답이 달라지므로.
+    되묻지 않는 경우: 이미 공복/식후/당화혈색소로 특정됐거나, 일반 질문.
+    반환: {term, options} 또는 None. (LLM이 아니라 규칙으로만 판단한다.)
+    """
+    if any(t in query_text for t in _ALREADY_SPECIFIC):
+        return None
+    if not any(t in query_text for t in _CLARIFY_TERMS):
+        return None
+    has_number = bool(re.search(r"\d", query_text))
+    asks_judgment = any(t in query_text for t in _ASKS_JUDGMENT)
+    if has_number or asks_judgment:
+        return {"term": "혈당", "options": CLARIFY_OPTIONS}
+    return None
 
 
 def judge_evidence(chunks: list[dict]) -> str:
@@ -158,14 +192,27 @@ def generate_answer(
     started = time.perf_counter()
     status, itok, otok, answer = "success", 0, 0, ""
     try:
+        headers = {"Authorization": f"Bearer {config.LLM_API_KEY}"}
         r = httpx.post(f"{config.NVIDIA_BASE_URL}/chat/completions",
-                       headers={"Authorization": f"Bearer {config.LLM_API_KEY}"},
-                       json=payload, timeout=90.0)
+                       headers=headers, json=payload, timeout=90.0)
         r.raise_for_status()
         body = r.json()
         answer = body["choices"][0]["message"]["content"].strip()
         usage = body.get("usage", {})
         itok, otok = usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0)
+        # 안전장치: 답변이 영어로 나오면 한국어로 한 번만 다시 요청한다.
+        if _mostly_english(answer):
+            payload["messages"] = messages + [
+                {"role": "assistant", "content": answer},
+                {"role": "user", "content": "방금 답변이 한국어가 아니었습니다. 같은 내용을 반드시 한국어로만 다시 답해 주세요."}]
+            r = httpx.post(f"{config.NVIDIA_BASE_URL}/chat/completions",
+                           headers=headers, json=payload, timeout=90.0)
+            r.raise_for_status()
+            body = r.json()
+            answer = body["choices"][0]["message"]["content"].strip()
+            u2 = body.get("usage", {})
+            itok += u2.get("prompt_tokens", 0)
+            otok += u2.get("completion_tokens", 0)
     except Exception:
         status = "failure"
         raise

@@ -95,7 +95,7 @@
 - [x] **T2.7 출처 표시** ✅ **완료 (2026-07-15)** — 답변 아래 "📚 근거 보기" 접이식에 문서·쪽 표시, 출처 클릭 시 `source_clicked` 이벤트(payload=제목·쪽, 답변메시지 연결). `app.render_sources` + `rag.respond`가 sources 반환. RAG를 채팅 흐름에 연결(질문=rag_question→respond→답변 표시).
 - [x] **T2.8 비용 로그** ✅ **완료 (2026-07-15)** — 모든 외부 호출(document_embedding·query_embedding·rag_answer)의 토큰·지연시간·상태를 `model_calls`에 기록(`database.log_model_call`). ⚠️ 단가·estimated_cost 환산은 NVIDIA 단가 확정(U13) 후 채운다.
 - [x] **T2.9 하이브리드 검색** ✅ **완료 (2026-07-16)** — 벡터 코사인 + 정확 키워드 **IDF 가중**(흔한 단어≈0, 희귀 용어 큰 가중). 검색 함수 `hybrid_match_chunks`, `database.hybrid_search`, `rag.extract_keywords`(조사 제거). 순진한 동일가중 하이브리드는 오히려 악화돼(흔한 단어 노이즈) IDF로 교정 → "저혈당" 케이스 정확 답변 개선. **근거 충분성 판단은 코사인 유지**(융합 score와 임계값 정합은 U4 튜닝). 근거: D37
-- [ ] **T2.10 용어 모호성 되묻기** ⭐ (2026-07-14 추가) — 승인 용어 사전 적용 + 모호 시 되묻기
+- [x] **T2.10 용어 모호성 되묻기** ⭐ ✅ **완료 (2026-07-16)** — "혈당"이 순간값인지 당화혈색소인지 **규칙 기반**으로 감지(`rag.detect_clarification`, LLM 추측 아님)해 되묻는다. 앱 흐름: 감지→선택지 버튼→`clarification_asked`/`clarification_answered` 이벤트(term·선택값)→고른 개념으로 답변. "모르겠어요"는 추측 없이 일반정보+의료진. 같은 세션 같은 용어 1회. message_type에 clarification_question/response 추가. **부수 개선: 답변이 영어로 새면 한국어로 재요청하는 안전장치(`_mostly_english`)** 추가. 용어사전 문구는 의료검토 대기(잠정).
   - **목적:** 고령 참여자의 "혈당"이 공복혈당인지 당화혈색소인지 **추측하지 않고 되묻는다** (안전)
   - **동시에 연구 관측:** 참여자가 두 지표를 구분하는지, "모르겠다" 비율은 얼마인지 → **AI 건강문해력 직접 관측치**
   - **완료 기준:** ① 모호성이 답을 바꿀 때만 되묻는다(남발 금지) ② "모르겠다" 선택 시 추측 없이 의료진 권고 ③ `clarification_asked`/`clarification_answered` 기록 ④ 같은 세션 같은 용어는 1회만

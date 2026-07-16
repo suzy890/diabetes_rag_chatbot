@@ -97,9 +97,11 @@ create table if not exists messages (
     participant_id    text        not null,
     system_version_id uuid        not null references system_versions(system_version_id),
     role              text        not null check (role in ('user', 'assistant', 'system')),
+    -- clarification_* 는 T2.10(용어 되묻기)에서 추가됨 (마이그레이션 add_clarification_message_types)
     message_type      text        not null check (message_type in (
                           'nudge', 'nudge_response', 'rag_question', 'rag_answer',
-                          'safety_message', 'free_text', 'system_notice')),
+                          'safety_message', 'free_text', 'system_notice',
+                          'clarification_question', 'clarification_response')),
     content           text        not null,
     created_at        timestamptz not null default now(),
     -- 참여자·세션 일관성을 DB가 원천 보장 (events와 동일 원칙)
