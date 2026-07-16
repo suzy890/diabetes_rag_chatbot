@@ -286,6 +286,17 @@ def render_chat() -> None:
         return
 
     question = typed.strip()
+    # 인사·잡담이면 차가운 '근거 없음' 대신 따뜻한 승인 템플릿으로 답한다 (질문은 아래 RAG로).
+    social = rag.detect_social(question)
+    if social:
+        try:
+            database.save_message(session_id, participant_id, "user", "free_text", question)
+            database.save_message(session_id, participant_id, "assistant", "system_notice", social)
+        except Exception as exc:
+            database.log_technical_error("db_insert_failed", f"social: {exc}",
+                                         participant_id, session_id)
+        st.rerun()
+
     try:
         saved = database.save_message(
             session_id, participant_id, "user", "rag_question", question

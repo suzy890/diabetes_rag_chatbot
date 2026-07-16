@@ -7,6 +7,7 @@
 - 답변은 검색된 근거 범위 안에서만 하고, 근거에 없는 수치는 말하지 않는다 (D31).
 """
 
+import json
 import re
 import time
 from functools import lru_cache
@@ -26,6 +27,28 @@ INSUFFICIENT_MSG = (
     "현재 안내 자료에서 이 질문에 대한 충분한 근거를 찾지 못했습니다. "
     "정확한 내용은 담당 의료진이나 약사와 상의해 주세요."
 )
+
+
+@lru_cache(maxsize=1)
+def _social() -> dict:
+    """잡담 응답 템플릿을 파일에서 읽는다 (친근한 대화용)."""
+    return json.loads((Path(__file__).resolve().parent.parent
+                       / "prompts" / "social_replies.json").read_text(encoding="utf-8"))
+
+
+def detect_social(text: str) -> str | None:
+    """질문이 아니라 '사회적 인사·잡담'이면 따뜻한 응답 문구를 돌려준다.
+
+    건강 관련 단어가 섞이면(guard) 잡담으로 처리하지 않고 그대로 RAG로 보낸다(안전 우선).
+    짧은 발화만 대상으로 해 실제 질문을 잘못 가로채지 않는다.
+    """
+    data = _social()
+    if len(text) > data["max_len"] or any(h in text for h in data["health_guard"]):
+        return None
+    for entry in data["replies"]:
+        if any(k in text for k in entry["keys"]):
+            return entry["reply"]
+    return None
 
 
 def _mostly_english(text: str) -> bool:
