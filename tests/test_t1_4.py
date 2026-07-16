@@ -48,6 +48,7 @@ def reset_test_participant() -> None:
     client.table("nudge_events").delete().eq("participant_id", PID).execute()
     client.table("events").delete().eq("participant_id", PID).execute()
     client.table("messages").delete().eq("participant_id", PID).execute()
+    client.table("sessions").delete().eq("participant_id", PID).execute()
 
 
 def show_nudge(session_id: str, template: dict) -> dict:
@@ -126,6 +127,8 @@ def main() -> int:
     print(f"\n── 결과: {len(results) - len(failed)}/{len(results)} 통과 ──")
     if failed:
         print("실패:", ", ".join(failed))
+    # 테스트가 만든 P002 데이터를 스스로 치운다 (실제 사용/데모에 잔여물이 섞이지 않도록).
+    reset_test_participant()
     return 1 if failed else 0
 
 
