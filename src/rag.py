@@ -222,8 +222,10 @@ def generate_answer(
         {"role": "system", "content": _system_prompt() + "\n\n[근거]\n" + evidence},
         {"role": "user", "content": query_text},
     ]
+    # max_tokens는 넉넉히(추론 모델이 잘려 답을 못 맺는 것 방지). 프롬프트의
+    # 'detailed thinking off'로 장황한 영어 추론을 억제해 잘림·영어누출을 함께 막는다.
     payload = {"model": config.LLM_MODEL, "messages": messages,
-               "temperature": config.LLM_TEMPERATURE, "max_tokens": 500}
+               "temperature": config.LLM_TEMPERATURE, "max_tokens": 800}
     body = _nvidia_call("chat/completions", payload, "rag_answer",
                         system_version_id, participant_id, question_message_id)
     answer = body["choices"][0]["message"]["content"].strip()
