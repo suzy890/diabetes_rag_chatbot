@@ -14,12 +14,15 @@ from pathlib import Path
 
 LOGIC_LIMIT = 500       # 로직 5개 모듈 합계 상한
 DATA_LIMIT = 250        # database.py 단독 상한
+UI_LIMIT = 250          # ui.py 단독 상한 (화면 그리기 = 프레젠테이션, 로직 아님 — D41)
 SRC = Path(__file__).resolve().parent.parent / "src"
 
 # 로직 모듈 (500 적용) — 비개발자 연구자가 읽는 '무엇을·왜'
 LOGIC_MODULES = ["app.py", "rag.py", "nudge.py", "safety.py", "config.py"]
 # DB 배관 모듈 (별도 상한)
 DATA_MODULE = "database.py"
+# 화면 프레젠테이션 모듈 (별도 상한) — 헤더·카드·말풍선 등 그리기 전용
+UI_MODULE = "ui.py"
 
 
 def code_lines(path: Path) -> int:
@@ -63,9 +66,13 @@ def main() -> int:
     # ② database.py → 단독 상한 (별도 관리)
     data_count = _count(DATA_MODULE) or 0
     print(f"{DATA_MODULE + ' (배관)':<14}{data_count:>10}  / 상한 {DATA_LIMIT}")
+    # ③ ui.py → 단독 상한 (화면 그리기)
+    ui_count = _count(UI_MODULE) or 0
+    print(f"{UI_MODULE + ' (화면)':<14}{ui_count:>10}  / 상한 {UI_LIMIT}")
 
     logic_ok = total <= LOGIC_LIMIT
     data_ok = data_count <= DATA_LIMIT
+    ui_ok = ui_count <= UI_LIMIT
     print()
     if logic_ok:
         print(f"✅ 로직 통과 — 여유 {LOGIC_LIMIT - total}줄")
@@ -75,8 +82,12 @@ def main() -> int:
         print(f"✅ database.py 통과 — 여유 {DATA_LIMIT - data_count}줄")
     else:
         print(f"❌ database.py 초과 — {data_count - DATA_LIMIT}줄. 읽기/쓰기 분리 등 검토.")
+    if ui_ok:
+        print(f"✅ ui.py 통과 — 여유 {UI_LIMIT - ui_count}줄")
+    else:
+        print(f"❌ ui.py 초과 — {ui_count - UI_LIMIT}줄. CSS로 옮기거나 분리 검토.")
 
-    return 0 if (logic_ok and data_ok) else 1
+    return 0 if (logic_ok and data_ok and ui_ok) else 1
 
 
 if __name__ == "__main__":

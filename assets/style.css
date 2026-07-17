@@ -48,6 +48,30 @@ h3 { font-size: 1.35rem !important; }
 
 /* 7) 화면 좌우 여백 살짝 넓혀 한 줄이 너무 길지 않게 (읽기 편함) */
 .block-container {
-    padding-top: 2.2rem !important;
+    padding-top: 1.6rem !important;
     max-width: 820px !important;
+}
+
+/* ── 개인화 인사 헤더 ─────────────────────────────── */
+.dh-header {
+    background: linear-gradient(135deg, #E6F4EF 0%, #EAF2F6 100%);
+    border: 1px solid #D2E6DF;
+    border-radius: 16px;
+    padding: 1.1rem 1.3rem;
+    margin-bottom: 1rem;
+}
+.dh-hello { font-size: 1.6rem; font-weight: 800; color: #0F5C4A; }
+.dh-sub   { font-size: 1.05rem; color: #4B6B63; margin-top: 0.25rem; }
+
+/* ── 추천 질문 카드 ──────────────────────────────── */
+.dh-cards-title { font-size: 1.15rem; font-weight: 700; color: #16232E; margin: 0.2rem 0 0.5rem; }
+/* 카드(=버튼) 안에서 이모지와 라벨이 위아래로 보이도록 줄바꿈을 살린다 */
+.stButton > button { white-space: pre-line !important; text-align: center !important; }
+
+/* ── 채팅 말풍선 살짝 다듬기 (둥근 모서리·여백) ────── */
+[data-testid="stChatMessage"] {
+    border-radius: 14px !important;
+    padding: 0.6rem 0.9rem !important;
+    background: #F6F9FB !important;
+    margin-bottom: 0.5rem !important;
 }

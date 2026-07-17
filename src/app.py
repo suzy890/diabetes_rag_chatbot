@@ -11,6 +11,7 @@ import streamlit as st
 import database
 import nudge
 import rag
+import ui
 
 st.set_page_config(page_title="당뇨 건강 도우미", page_icon="💙", layout="centered")
 
@@ -248,10 +249,17 @@ def render_chat() -> None:
     participant_id = st.session_state["participant_id"]
     session_id = st.session_state["session_id"]
 
-    st.title("당뇨 건강 도우미")
-    st.caption(f"{participant_id}님, 안녕하세요.")
+    # 개인화 인사 (호칭이 있으면 호칭, 없으면 참여자 코드). 호칭은 화면에만 쓴다.
+    participant = database.get_participant(participant_id)
+    ui.greeting((participant or {}).get("display_name") or participant_id)
 
     maybe_show_nudge(participant_id, session_id)
+
+    # 추천 질문 카드 — 누르면 그 질문으로 대화를 시작한다 (막막함 해소).
+    picked = ui.question_cards()
+    if picked:
+        handle_question(picked, participant_id, session_id)
+        st.rerun()
 
     # 화면 상태가 아니라 DB에서 대화를 불러온다 → 새로고침해도 복원된다.
     try:
@@ -278,12 +286,17 @@ def render_chat() -> None:
     render_action_options(participant_id, session_id)
     render_clarification_options(participant_id, session_id)
 
-    typed = st.chat_input("메시지를 입력하세요")
-    if not typed or not typed.strip():
-        return
+    typed = st.chat_input("무엇이든 편하게 물어보세요. 예) 오늘 식단이 궁금해요")
+    if typed and typed.strip():
+        handle_question(typed.strip(), participant_id, session_id)
+        st.rerun()
 
-    question = typed.strip()
-    # 인사·잡담이면 차가운 '근거 없음' 대신 따뜻한 승인 템플릿으로 답한다 (질문은 아래 RAG로).
+
+def handle_question(question: str, participant_id: str, session_id: str) -> None:
+    """사용자 질문 하나를 처리한다 (입력창·추천카드 공용). 화면 갱신은 호출부가 한다.
+
+    잡담이면 따뜻한 응답, 아니면 질문 저장 → (모호하면 되묻기 / 아니면 근거 기반 답변).
+    """
     social = rag.detect_social(question)
     if social:
         try:
@@ -292,22 +305,16 @@ def render_chat() -> None:
         except Exception as exc:
             database.log_technical_error("db_insert_failed", f"social: {exc}",
                                          participant_id, session_id)
-        st.rerun()
-
+        return
     try:
-        saved = database.save_message(
-            session_id, participant_id, "user", "rag_question", question
-        )
-        database.log_event(
-            "question_asked", participant_id, session_id, related_message_id=saved["message_id"]
-        )
+        saved = database.save_message(session_id, participant_id, "user", "rag_question", question)
+        database.log_event("question_asked", participant_id, session_id,
+                           related_message_id=saved["message_id"])
     except Exception as exc:
-        database.log_technical_error(
-            "db_insert_failed", f"save_message: {exc}", participant_id, session_id
-        )
+        database.log_technical_error("db_insert_failed", f"save_message: {exc}",
+                                     participant_id, session_id)
         st.error("메시지를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.")
         return
-
     # 용어가 모호하면(예: '혈당'이 순간값인지 당화혈색소인지) 추측하지 않고 되묻는다 (T2.10).
     clarify = rag.detect_clarification(question)
     if clarify and clarify["term"] not in st.session_state.get("clarified_terms", set()):
@@ -323,8 +330,6 @@ def render_chat() -> None:
             "question_message_id": saved["message_id"], "clarify_message_id": cmsg["message_id"]}
     else:
         run_rag(question, participant_id, session_id, saved["message_id"])
-
-    st.rerun()
 
 
 apply_theme()
