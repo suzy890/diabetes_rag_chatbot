@@ -255,12 +255,6 @@ def render_chat() -> None:
 
     maybe_show_nudge(participant_id, session_id)
 
-    # 추천 질문 카드 — 누르면 그 질문으로 대화를 시작한다 (막막함 해소).
-    picked = ui.question_cards()
-    if picked:
-        handle_question(picked, participant_id, session_id)
-        st.rerun()
-
     # 화면 상태가 아니라 DB에서 대화를 불러온다 → 새로고침해도 복원된다.
     try:
         messages = database.get_messages(session_id)

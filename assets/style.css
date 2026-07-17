@@ -63,11 +63,6 @@ h3 { font-size: 1.35rem !important; }
 .dh-hello { font-size: 1.6rem; font-weight: 800; color: #0F5C4A; }
 .dh-sub   { font-size: 1.05rem; color: #4B6B63; margin-top: 0.25rem; }
 
-/* ── 추천 질문 카드 ──────────────────────────────── */
-.dh-cards-title { font-size: 1.15rem; font-weight: 700; color: #16232E; margin: 0.2rem 0 0.5rem; }
-/* 카드(=버튼) 안에서 이모지와 라벨이 위아래로 보이도록 줄바꿈을 살린다 */
-.stButton > button { white-space: pre-line !important; text-align: center !important; }
-
 /* ── 채팅 말풍선 살짝 다듬기 (둥근 모서리·여백) ────── */
 [data-testid="stChatMessage"] {
     border-radius: 14px !important;
