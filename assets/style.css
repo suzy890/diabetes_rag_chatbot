@@ -1,0 +1,53 @@
+/* 고령 참여자 접근성 CSS — 큰 글씨·큰 버튼·넉넉한 간격.
+   Streamlit 화면 위에 덧씌운다(app.apply_theme가 주입). 문구/수치는 자유롭게 조정 가능.
+   ⚠️ Streamlit 버전에 따라 클래스명이 바뀔 수 있어, 넓은 선택자 + !important로 견고하게 잡는다. */
+
+/* 1) 전체 본문 글씨를 키우고 줄간격을 넓힌다 (가독성) */
+html, body, .stApp, .stMarkdown, p, li, label, span, div[data-testid="stChatMessageContent"] {
+    font-size: 1.18rem !important;
+    line-height: 1.75 !important;
+}
+
+/* 2) 제목은 더 크고 또렷하게 */
+h1 { font-size: 2.1rem !important; font-weight: 800 !important; }
+h2 { font-size: 1.6rem !important; }
+h3 { font-size: 1.35rem !important; }
+
+/* 3) 버튼(넛지·행동·되묻기 선택지)을 크고 누르기 쉽게 */
+.stButton > button {
+    font-size: 1.15rem !important;
+    font-weight: 700 !important;
+    padding: 0.7rem 1.1rem !important;
+    border-radius: 12px !important;
+    min-height: 3.2rem !important;
+    border: 2px solid #0B6E99 !important;
+    width: 100% !important;
+}
+.stButton > button:hover {
+    background: #0B6E99 !important;
+    color: #FFFFFF !important;
+}
+
+/* 4) 채팅 입력창을 크게 (글씨·높이) */
+[data-testid="stChatInput"] textarea, .stChatInput textarea {
+    font-size: 1.15rem !important;
+    min-height: 3rem !important;
+}
+
+/* 5) 로그인 코드 입력칸을 크게 */
+.stTextInput input {
+    font-size: 1.25rem !important;
+    padding: 0.7rem !important;
+}
+
+/* 6) 채팅 말풍선에 여백을 주어 답답하지 않게 */
+[data-testid="stChatMessage"] {
+    padding: 0.4rem 0.2rem !important;
+    margin-bottom: 0.3rem !important;
+}
+
+/* 7) 화면 좌우 여백 살짝 넓혀 한 줄이 너무 길지 않게 (읽기 편함) */
+.block-container {
+    padding-top: 2.2rem !important;
+    max-width: 820px !important;
+}

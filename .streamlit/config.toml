@@ -1,0 +1,12 @@
+# Streamlit 테마 — 고령 참여자 접근성 (차분·고대비)
+# 색·폰트만 여기서 정하고, 글씨 크기·버튼 등 세부는 assets/style.css 에서 조정한다.
+[theme]
+primaryColor = "#0B6E99"            # 버튼·강조 (차분한 청록blue, 대비 충분)
+backgroundColor = "#FFFFFF"         # 배경 흰색 (밝고 깨끗)
+secondaryBackgroundColor = "#EAF2F6"  # 채팅 말풍선·입력창 (연한 하늘빛)
+textColor = "#16232E"               # 글자 진한 회남색 (높은 대비)
+font = "sans serif"
+
+[server]
+# 데모/실증 환경에서 사용량 통계 수집 끔
+gatherUsageStats = false
