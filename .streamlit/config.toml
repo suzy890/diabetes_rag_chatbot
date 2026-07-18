@@ -6,7 +6,3 @@ backgroundColor = "#FFFFFF"         # 배경 흰색 (밝고 깨끗)
 secondaryBackgroundColor = "#EAF2F6"  # 채팅 말풍선·입력창 (연한 하늘빛)
 textColor = "#16232E"               # 글자 진한 회남색 (높은 대비)
 font = "sans serif"
-
-[server]
-# 데모/실증 환경에서 사용량 통계 수집 끔
-gatherUsageStats = false

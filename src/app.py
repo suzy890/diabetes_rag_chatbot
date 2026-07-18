@@ -206,13 +206,25 @@ def render_sources(message: dict, sources: list[dict],
 
 
 def run_rag(question: str, participant_id: str, session_id: str, question_message_id: str) -> None:
-    """질문에 근거 기반 답변을 생성하고, 출처를 화면 상태에 담는다. 실패는 기록만 하고 넘어간다."""
+    """근거를 찾아(스피너) 답변을 실시간으로 흘려보이고(스트리밍), 끝나면 저장한다."""
     try:
-        with st.spinner("근거를 찾고 있습니다…"):
-            result = rag.respond(question, session_id, participant_id, question_message_id)
-        st.session_state.setdefault("sources_by_msg", {})[result["answer_message_id"]] = result["sources"]
+        with st.spinner("근거를 찾고 있어요… 📚 당뇨 안내 자료를 확인 중입니다"):
+            r = rag.retrieve(question, session_id, participant_id, question_message_id)
+        titles = {d["document_id"]: d["title"] for d in database.list_documents()}
+        selected = [{**c, "title": titles.get(c["document_id"], "문서")} for c in r["selected"]]
+        if r["evidence_level"] == "insufficient":
+            answer = rag.INSUFFICIENT_MSG
+            ui.show_assistant(answer)
+        else:
+            sysver = database.get_active_system_version_id()
+            answer = ui.stream_assistant(rag.answer_stream(
+                question, selected, r["evidence_level"], participant_id, question_message_id, sysver))
+        msg = database.save_message(session_id, participant_id, "assistant", "rag_answer", answer)
+        database.update_retrieval_answer(r["retrieval_id"], msg["message_id"])
+        sources = [{"title": c["title"], "page": c.get("page_number")} for c in selected]
+        st.session_state.setdefault("sources_by_msg", {})[msg["message_id"]] = sources
     except Exception as exc:
-        database.log_technical_error("rag_failed", f"respond: {exc}", participant_id, session_id)
+        database.log_technical_error("rag_failed", f"stream: {exc}", participant_id, session_id)
         st.error("답변을 만드는 중 문제가 생겼습니다. 잠시 후 다시 시도해 주세요.")
 
 
@@ -323,6 +335,7 @@ def handle_question(question: str, participant_id: str, session_id: str) -> None
             "term": clarify["term"], "options": clarify["options"], "question": question,
             "question_message_id": saved["message_id"], "clarify_message_id": cmsg["message_id"]}
     else:
+        ui.show_user(question)   # 질문을 즉시 보여준 뒤 답변을 스트리밍한다
         run_rag(question, participant_id, session_id, saved["message_id"])
 
 

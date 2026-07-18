@@ -21,3 +21,21 @@ def greeting(display_name: str) -> None:
         f"</div>",
         unsafe_allow_html=True,
     )
+
+
+def show_user(text: str) -> None:
+    """사용자 메시지를 즉시 화면에 보여준다 (전송 직후 바로 보이도록)."""
+    with st.chat_message("user"):
+        st.write(text)
+
+
+def show_assistant(text: str) -> None:
+    """AI 메시지를 한 번에 보여준다 (근거 부족 안내 등 스트리밍 아닌 경우)."""
+    with st.chat_message("assistant"):
+        st.write(text)
+
+
+def stream_assistant(token_generator) -> str:
+    """AI 답변을 실시간으로 흘려보내며 보여준다. 완성된 전체 텍스트를 돌려준다."""
+    with st.chat_message("assistant"):
+        return st.write_stream(token_generator)

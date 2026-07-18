@@ -15,14 +15,15 @@ from pathlib import Path
 LOGIC_LIMIT = 500       # 로직 5개 모듈 합계 상한
 DATA_LIMIT = 250        # database.py 단독 상한
 UI_LIMIT = 250          # ui.py 단독 상한 (화면 그리기 = 프레젠테이션, 로직 아님 — D41)
+LLM_LIMIT = 150         # llm_client.py 단독 상한 (외부 API 호출 배관, 로직 아님)
 SRC = Path(__file__).resolve().parent.parent / "src"
 
 # 로직 모듈 (500 적용) — 비개발자 연구자가 읽는 '무엇을·왜'
 LOGIC_MODULES = ["app.py", "rag.py", "nudge.py", "safety.py", "config.py"]
-# DB 배관 모듈 (별도 상한)
-DATA_MODULE = "database.py"
-# 화면 프레젠테이션 모듈 (별도 상한) — 헤더·카드·말풍선 등 그리기 전용
-UI_MODULE = "ui.py"
+# 배관 모듈들 (각자 별도 상한 — 기계적 인프라, 로직 아님)
+DATA_MODULE = "database.py"     # DB 저장·조회
+UI_MODULE = "ui.py"             # 화면 그리기
+LLM_MODULE = "llm_client.py"    # 외부 LLM·임베딩 API 호출
 
 
 def code_lines(path: Path) -> int:
@@ -69,10 +70,14 @@ def main() -> int:
     # ③ ui.py → 단독 상한 (화면 그리기)
     ui_count = _count(UI_MODULE) or 0
     print(f"{UI_MODULE + ' (화면)':<14}{ui_count:>10}  / 상한 {UI_LIMIT}")
+    # ④ llm_client.py → 단독 상한 (외부 API 배관)
+    llm_count = _count(LLM_MODULE) or 0
+    print(f"{LLM_MODULE + ' (API)':<16}{llm_count:>8}  / 상한 {LLM_LIMIT}")
 
     logic_ok = total <= LOGIC_LIMIT
     data_ok = data_count <= DATA_LIMIT
     ui_ok = ui_count <= UI_LIMIT
+    llm_ok = llm_count <= LLM_LIMIT
     print()
     if logic_ok:
         print(f"✅ 로직 통과 — 여유 {LOGIC_LIMIT - total}줄")
@@ -86,8 +91,12 @@ def main() -> int:
         print(f"✅ ui.py 통과 — 여유 {UI_LIMIT - ui_count}줄")
     else:
         print(f"❌ ui.py 초과 — {ui_count - UI_LIMIT}줄. CSS로 옮기거나 분리 검토.")
+    if llm_ok:
+        print(f"✅ llm_client.py 통과 — 여유 {LLM_LIMIT - llm_count}줄")
+    else:
+        print(f"❌ llm_client.py 초과 — {llm_count - LLM_LIMIT}줄.")
 
-    return 0 if (logic_ok and data_ok and ui_ok) else 1
+    return 0 if (logic_ok and data_ok and ui_ok and llm_ok) else 1
 
 
 if __name__ == "__main__":

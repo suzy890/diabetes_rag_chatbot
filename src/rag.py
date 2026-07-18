@@ -9,14 +9,12 @@
 
 import json
 import re
-import time
 from functools import lru_cache
 from pathlib import Path
 
-import httpx
-
 import config
 import database
+import llm_client
 
 # 키워드 추출 시 떼어낼 흔한 조사 (긴 것부터 — "으로"를 "로"보다 먼저 검사)
 _JOSA = ("으로", "에서", "에게", "까지", "부터", "이나", "라고", "은", "는", "이", "가",
@@ -51,47 +49,11 @@ def detect_social(text: str) -> str | None:
     return None
 
 
-def _mostly_english(text: str) -> bool:
-    """답변이 (한국어가 아니라) 영어로 나왔는지 판별한다. 추론 모델이 가끔 영어로 샌다."""
-    korean = len(re.findall(r"[가-힣]", text))
-    english = len(re.findall(r"[A-Za-z]", text))
-    return english > korean and korean < 10
-
-
 @lru_cache(maxsize=1)
 def _system_prompt() -> str:
     """답변 생성용 시스템 프롬프트를 파일에서 읽는다 (HTML 주석 헤더는 제외)."""
     text = (Path(__file__).resolve().parent.parent / "prompts" / "rag_answer_system.md").read_text(encoding="utf-8")
     return text.split("-->", 1)[-1].strip()
-
-
-def _nvidia_call(path: str, payload: dict, call_type: str, system_version_id: str,
-                 participant_id: str | None = None, message_id: str | None = None) -> dict:
-    """NVIDIA API를 호출하고 토큰·지연·상태를 model_calls에 남긴다 (임베딩·답변 공통 배관).
-
-    성공하면 응답 본문(dict)을 돌려준다. 실패해도 비용 기록은 남기고 예외를 올린다.
-    """
-    started = time.perf_counter()
-    status, itok, otok = "success", 0, 0
-    try:
-        r = httpx.post(f"{config.NVIDIA_BASE_URL}/{path}",
-                       headers={"Authorization": f"Bearer {config.LLM_API_KEY}"},
-                       json=payload, timeout=90.0)
-        r.raise_for_status()
-        body = r.json()
-        usage = body.get("usage", {})
-        itok = usage.get("prompt_tokens") or usage.get("total_tokens", 0)
-        otok = usage.get("completion_tokens", 0)
-        return body
-    except Exception:
-        status = "failure"
-        raise
-    finally:
-        database.log_model_call(
-            call_type=call_type, system_version_id=system_version_id, provider="nvidia",
-            model_name=payload.get("model"), input_tokens=itok, output_tokens=otok,
-            latency_ms=int((time.perf_counter() - started) * 1000), status=status,
-            participant_id=participant_id, related_message_id=message_id)
 
 
 def embed_query(
@@ -104,8 +66,8 @@ def embed_query(
     sysver = system_version_id or database.get_active_system_version_id()
     payload = {"model": config.EMBED_MODEL, "input": [text],
                "encoding_format": "float", "input_type": "query", "truncate": "END"}
-    body = _nvidia_call("embeddings", payload, "query_embedding", sysver,
-                        participant_id, question_message_id)
+    body = llm_client.call("embeddings", payload, "query_embedding", sysver,
+                           participant_id, question_message_id)
     return body["data"][0]["embedding"]
 
 
@@ -203,18 +165,20 @@ def retrieve(
             "evidence_level": level, "selected": selected}
 
 
-def generate_answer(
+def answer_stream(
     query_text: str,
     selected: list[dict],
     level: str,
     participant_id: str | None,
     question_message_id: str | None,
     system_version_id: str,
-) -> str:
-    """선택된 근거로 답변을 만든다. 근거 부족이면 LLM을 부르지 않고 고정 안내문을 돌려준다."""
+):
+    """선택된 근거로 답변을 스트리밍한다(generator). 근거 부족이면 고정 안내문을 한 번에 낸다.
+    'detailed thinking off' 프롬프트로 장황한 영어 추론을 억제해 잘림·영어누출을 막는다.
+    """
     if level == "insufficient" or not selected:
-        return INSUFFICIENT_MSG
-
+        yield INSUFFICIENT_MSG
+        return
     evidence = "\n\n".join(
         f"[근거{i}] (출처: {c.get('title', '문서')} {c.get('page_number', '')}쪽)\n{c['content']}"
         for i, c in enumerate(selected, 1))
@@ -222,22 +186,10 @@ def generate_answer(
         {"role": "system", "content": _system_prompt() + "\n\n[근거]\n" + evidence},
         {"role": "user", "content": query_text},
     ]
-    # max_tokens는 넉넉히(추론 모델이 잘려 답을 못 맺는 것 방지). 프롬프트의
-    # 'detailed thinking off'로 장황한 영어 추론을 억제해 잘림·영어누출을 함께 막는다.
     payload = {"model": config.LLM_MODEL, "messages": messages,
                "temperature": config.LLM_TEMPERATURE, "max_tokens": 800}
-    body = _nvidia_call("chat/completions", payload, "rag_answer",
-                        system_version_id, participant_id, question_message_id)
-    answer = body["choices"][0]["message"]["content"].strip()
-    # 안전장치: 답변이 영어로 나오면 한국어로 한 번만 다시 요청한다(재요청도 비용이 기록됨).
-    if _mostly_english(answer):
-        payload["messages"] = messages + [
-            {"role": "assistant", "content": answer},
-            {"role": "user", "content": "방금 답변이 한국어가 아니었습니다. 같은 내용을 반드시 한국어로만 다시 답해 주세요."}]
-        body = _nvidia_call("chat/completions", payload, "rag_answer",
-                            system_version_id, participant_id, question_message_id)
-        answer = body["choices"][0]["message"]["content"].strip()
-    return answer
+    yield from llm_client.stream(payload, "rag_answer", system_version_id,
+                                 participant_id, question_message_id)
 
 
 def respond(
@@ -253,8 +205,9 @@ def respond(
     titles = {d["document_id"]: d["title"] for d in database.list_documents()}
     selected = [{**c, "title": titles.get(c["document_id"], "문서")} for c in r["selected"]]
 
-    answer = generate_answer(query_text, selected, r["evidence_level"],
-                             participant_id, question_message_id, sysver)
+    # 비스트리밍 경로(테스트 등): 스트림을 모아 전체 답변을 만든다.
+    answer = "".join(answer_stream(query_text, selected, r["evidence_level"],
+                                   participant_id, question_message_id, sysver))
     msg = database.save_message(session_id=session_id, participant_id=participant_id,
                                 role="assistant", message_type="rag_answer", content=answer)
     database.update_retrieval_answer(r["retrieval_id"], msg["message_id"])
