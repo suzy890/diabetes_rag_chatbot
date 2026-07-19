@@ -126,15 +126,17 @@ def detect_clarification(query_text: str) -> dict | None:
 
 
 def judge_evidence(chunks: list[dict]) -> str:
-    """최상위 청크의 코사인 유사도로 근거 충분성을 3단계로 가른다 (RAG_RULES §3).
+    """검색된 청크 중 코사인 유사도가 가장 높은 값으로 근거 충분성을 3단계로 가른다 (RAG_RULES §3).
 
     검색은 하이브리드(벡터+키워드)로 하되, 근거 '충분성' 판단은 보정된 코사인
     유사도로 한다. 융합 점수로 판단하면 임계값(코사인 기준)과 어긋나 보류가 흔들린다.
+    청크는 융합 점수 순으로 오므로 chunks[0]이 코사인 최고가 아닐 수 있다 → 최댓값으로 본다.
+    (키워드로 끌어올린 청크가 1위여도, 실제 근거가 되는 고유사도 청크를 놓치지 않게.)
     → 검색 품질과 판단 임계값의 정합은 파일럿 튜닝 대상(U4).
     """
     if not chunks:
         return "insufficient"
-    top = chunks[0].get("similarity", 0.0)
+    top = max(c.get("similarity", 0.0) for c in chunks)
     if top < config.EVIDENCE_LOWER:
         return "insufficient"
     if top >= config.EVIDENCE_UPPER:

@@ -37,7 +37,7 @@ LLM_API_KEY = _read_secret("LLM_API_KEY").strip().strip('"').strip("'")
 LLM_MODEL = "nvidia/nemotron-3-ultra-550b-a55b"
 EMBED_MODEL = "nvidia/llama-nemotron-embed-1b-v2"
 # 문서 청크를 임베딩한 버전 — 질문도 같은 모델로 임베딩해야 검색이 된다.
-EMBED_VERSION = "nemotron-2048-basic512-clean-v1"
+EMBED_VERSION = "nemotron-2048-overlap-v1"
 
 # 답변 생성 설정 (연구 표준화 — D30: 창의성보다 일관성)
 LLM_TEMPERATURE = 0.2
