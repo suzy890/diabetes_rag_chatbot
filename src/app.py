@@ -53,22 +53,7 @@ def start_session(participant_id: str) -> None:
 
 
 def render_login() -> None:
-    ui.login_decor()
-    st.markdown('<div class="login-spacer"></div>', unsafe_allow_html=True)
-    welcome_col, form_col = st.columns([1.08, 0.92], gap="large", vertical_alignment="center")
-    with welcome_col:
-        ui.login_welcome()
-    with form_col:
-        with st.container(key="login_card"):
-            ui.login_card_intro()
-            with st.form("login_form", border=False):
-                typed = st.text_input("참여자 코드", placeholder="예: P001",
-                                      help="영문과 숫자를 안내받은 그대로 입력해 주세요.")
-                submitted = st.form_submit_button("건강 대화 시작하기  →",
-                                                  use_container_width=True, type="primary")
-            ui.login_privacy()
-    ui.login_footer()
-
+    typed, submitted = ui.login_form()   # 화면은 ui가 그리고, 검증은 여기서 한다
     if not submitted:
         return
 

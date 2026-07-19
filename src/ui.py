@@ -72,6 +72,27 @@ def login_footer() -> None:
                 unsafe_allow_html=True)
 
 
+def login_form() -> tuple[str, bool]:
+    """로그인 화면 전체를 그리고 (입력 코드, 제출됨)을 돌려준다. 검증은 app이 한다(DB는 안 만짐)."""
+    login_decor()
+    st.markdown('<div class="login-spacer"></div>', unsafe_allow_html=True)
+    welcome_col, form_col = st.columns([1.08, 0.92], gap="large", vertical_alignment="center")
+    with welcome_col:
+        login_welcome()
+    code, submitted = "", False
+    with form_col:
+        with st.container(key="login_card"):
+            login_card_intro()
+            with st.form("login_form", border=False):
+                code = st.text_input("참여자 코드", placeholder="예: P001",
+                                     help="영문과 숫자를 안내받은 그대로 입력해 주세요.")
+                submitted = st.form_submit_button("건강 대화 시작하기  →",
+                                                  use_container_width=True, type="primary")
+            login_privacy()
+    login_footer()
+    return code, submitted
+
+
 def header() -> str | None:
     """상단 헤더(브랜드·글자크게·나가기)를 그리고, 눌린 동작('size'|'exit')을 돌려준다."""
     brand_col, _spacer, size_col, exit_col = st.columns([3, 5, 1.35, 1], vertical_alignment="center")

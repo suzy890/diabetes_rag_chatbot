@@ -54,11 +54,15 @@ def is_health_related(text: str) -> bool:
     return any(h in text for h in _social()["health_guard"])
 
 
-@lru_cache(maxsize=1)
-def _system_prompt() -> str:
-    """답변 생성용 시스템 프롬프트를 파일에서 읽는다 (HTML 주석 헤더는 제외)."""
-    text = (Path(__file__).resolve().parent.parent / "prompts" / "rag_answer_system.md").read_text(encoding="utf-8")
+@lru_cache(maxsize=2)
+def _prompt(name: str) -> str:
+    """prompts/<name>.md 시스템 프롬프트를 읽는다 (HTML 주석 헤더는 제외)."""
+    text = (Path(__file__).resolve().parent.parent / "prompts" / f"{name}.md").read_text(encoding="utf-8")
     return text.split("-->", 1)[-1].strip()
+
+
+def _system_prompt() -> str:
+    return _prompt("rag_answer_system")
 
 
 def embed_query(
@@ -182,8 +186,15 @@ def answer_stream(
     'detailed thinking off' 프롬프트로 장황한 영어 추론을 억제해 잘림·영어누출을 막는다.
     """
     if level == "insufficient" or not selected:
-        # 건강 질문인데 근거 없음 → 안전 보류. 당뇨와 무관한 질문 → 차갑지 않게 친근히 안내.
-        yield INSUFFICIENT_MSG if is_health_related(query_text) else _social()["offtopic"]
+        if is_health_related(query_text):
+            yield INSUFFICIENT_MSG          # 건강 질문인데 근거 없음 → 안전 보류
+            return
+        # 당뇨와 무관한 질문 → LLM이 친근하게 자연 대화(의료 조언 금지·건강질문 유도, 프롬프트로 제약)
+        payload = {"model": config.LLM_MODEL, "temperature": 0.5, "max_tokens": 300,
+                   "messages": [{"role": "system", "content": _prompt("offtopic_system")},
+                                {"role": "user", "content": query_text}]}
+        yield from llm_client.stream(payload, "rag_answer", system_version_id,
+                                     participant_id, question_message_id)
         return
     evidence = "\n\n".join(
         f"[근거{i}] (출처: {c.get('title', '문서')} {c.get('page_number', '')}쪽)\n{c['content']}"
