@@ -23,7 +23,9 @@ html, body, [class*="css"] {
 
 [data-testid="stHeader"], [data-testid="stToolbar"], footer { display: none !important; }
 [data-testid="stAppViewContainer"] { background: #f4f8f5; }
-[data-testid="stMain"] { overflow: visible; }
+/* 메인 영역은 세로 스크롤 컨테이너로 유지(대화가 길어지면 내려서 봐야 함).
+   가로는 숨겨 full-bleed 요소(header-rule 등)로 가로 스크롤이 생기지 않게 한다. */
+[data-testid="stMain"] { overflow-y: auto; overflow-x: hidden; }
 .stMainBlockContainer { max-width: 1220px; padding: 2rem 2rem 3rem; }
 
 .brand { display: flex; align-items: center; gap: 12px; font-size: 22px; font-weight: 800; letter-spacing: -0.04em; }

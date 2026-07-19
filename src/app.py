@@ -299,7 +299,11 @@ def render_chat() -> None:
             render_action_options(participant_id, session_id)
             render_clarification_options(participant_id, session_id)
 
-            if not messages:   # 첫 화면에서만 추천 질문(문장형)을 보조로 제시
+            # 사용자가 아직 질문을 안 했으면 추천 질문을 제시한다. (넛지가 항상 메시지로
+            # 먼저 저장돼 messages는 늘 비어있지 않으므로, '메시지 유무'가 아니라 '질문 유무'로 판단)
+            asked = any(m["role"] == "user" and m.get("message_type") == "rag_question"
+                        for m in messages)
+            if not asked:
                 picked = ui.quick_questions()
                 if picked:
                     handle_question(picked, participant_id, session_id, source="suggested")
