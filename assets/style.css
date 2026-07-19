@@ -119,14 +119,14 @@ html, body, [class*="css"] {
 }
 .nudge-copy p { margin: 0 0 9px; }
 .nudge-copy strong { color: #326c5c; }
-.st-key-nudge_yes button, .st-key-nudge_done button, .st-key-nudge_later button,
-[class*="st-key-quick_"] button, [class*="st-key-nudgeopt_"] button, [class*="st-key-clarify_"] button,
-[class*="st-key-action_"] button {
+/* 넛지·행동·되묻기·추천질문 선택지 버튼 (우리 위젯 key: nudge_/action_/clarify_/quick_) */
+[class*="st-key-nudge_"] button, [class*="st-key-action_"] button,
+[class*="st-key-clarify_"] button, [class*="st-key-quick_"] button {
   min-height: 46px; padding: 5px 10px; border: 1px solid #bcd8ca; border-radius: 13px;
   background: white; color: var(--green-dark); font-size: 14px; font-weight: 750;
 }
-[class*="st-key-quick_"] button:hover, [class*="st-key-nudgeopt_"] button:hover,
-[class*="st-key-clarify_"] button:hover, [class*="st-key-action_"] button:hover { background: var(--mint-light); border-color: var(--green); color: var(--green-dark); }
+[class*="st-key-nudge_"] button:hover, [class*="st-key-action_"] button:hover,
+[class*="st-key-clarify_"] button:hover, [class*="st-key-quick_"] button:hover { background: var(--mint-light); border-color: var(--green); color: var(--green-dark); }
 .nudge-confirm { margin-top: 10px; padding: 10px 13px; border-radius: 11px; background: white; color: var(--green-dark); font-size: 14px; font-weight: 700; }
 .quick-label { margin: 16px 0 7px; color: #77847e; font-size: 13px; }
 [data-testid="stChatInput"] { border: 2px solid #d4e2da; border-radius: 19px; background: #fbfdfc; }

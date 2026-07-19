@@ -5,7 +5,20 @@
 색·크기·문구는 코드 밖(assets/style.css)에서 조정한다.
 """
 
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 import streamlit as st
+
+USER_AVATAR = "🙂"
+BOT_AVATAR = "🌿"
+
+# 첫 화면 추천 질문(문장형, 입력창 위 보조). 적고 일반적으로 유지(연구 관측 오염 방지).
+QUICK_QUESTIONS = [
+    "식후 혈당은 언제 재나요?",
+    "오늘은 어떤 운동이 좋을까요?",
+    "저녁 식사 양이 고민돼요",
+]
 
 
 def brand(compact: bool = False) -> None:
@@ -59,34 +72,76 @@ def login_footer() -> None:
                 unsafe_allow_html=True)
 
 
-def greeting(display_name: str) -> None:
-    """개인화 인사 헤더. 이름은 실명이 아니라 호칭이며 화면에만 쓴다(외부 전송 안 함).
+def header() -> str | None:
+    """상단 헤더(브랜드·글자크게·나가기)를 그리고, 눌린 동작('size'|'exit')을 돌려준다."""
+    brand_col, _spacer, size_col, exit_col = st.columns([3, 5, 1.35, 1], vertical_alignment="center")
+    with brand_col:
+        brand(compact=True)
+    with size_col:
+        clicked_size = st.button("가⁺  글자 크게", key="text_size", use_container_width=True)
+    with exit_col:
+        clicked_exit = st.button("나가기", key="logout", use_container_width=True)
+    st.markdown('<div class="header-rule"></div>', unsafe_allow_html=True)
+    return "size" if clicked_size else "exit" if clicked_exit else None
 
-    인지부하를 줄이고 '믿을 수 있는 건강도우미' 느낌을 주는 용도. 질문을 유도하거나
-    쥐여주지 않는다(참여자가 스스로 무엇을 묻는지가 연구 관측 대상이므로).
-    """
+
+def apply_large_text() -> None:
+    """'글자 크게'가 켜졌을 때 말풍선·입력창 글씨를 키운다."""
+    st.markdown("<style>[data-testid='stChatMessageContent']{font-size:20px!important}"
+                "[data-testid='stChatInput'] textarea{font-size:19px!important}</style>",
+                unsafe_allow_html=True)
+
+
+def today_card() -> None:
+    """대화 옆 '오늘' 카드 (날짜·인사·팁). 데스크톱에서만 보임. 진행바는 두지 않는다(실데이터 없음)."""
+    now = datetime.now(ZoneInfo("Asia/Seoul"))
+    date_str = f"{now.month}월 {now.day}일 · {'월화수목금토일'[now.weekday()]}요일"
+    greet = "좋은 아침이에요!" if now.hour < 11 else "좋은 오후예요!" if now.hour < 18 else "좋은 저녁이에요!"
     st.markdown(
-        f"<div class='dh-header'>"
-        f"<div class='dh-hello'>안녕하세요, {display_name}님 😊</div>"
-        f"<div class='dh-sub'>오늘도 건강을 함께 관리해요 · 항상 근거에 기반해 답해드려요</div>"
-        f"</div>",
-        unsafe_allow_html=True,
-    )
+        f'<div class="date-chip">{date_str}</div>'
+        f'<h2>{greet}</h2>'
+        f'<p>오늘도 무리하지 말고,<br>할 수 있는 만큼 함께해요.</p>'
+        f'<div class="side-tip"><span>☀</span><p><strong>작은 팁</strong>'
+        f'완벽하게 하려 하기보다 한 가지부터 시작해 보세요.</p></div>',
+        unsafe_allow_html=True)
+
+
+def conversation_top() -> None:
+    """대화 영역 상단 상태 바."""
+    st.markdown(
+        '<div class="conversation-top"><span class="online-dot"></span>'
+        '<strong>건강 도우미</strong><span>지금 대화할 수 있어요</span></div>'
+        '<div class="day-divider"><span>오늘</span></div>',
+        unsafe_allow_html=True)
+
+
+def medical_note() -> None:
+    st.markdown('<div class="medical-note">건강 정보는 참고용이며, 진단이나 처방은 '
+                '의료진과 상담해 주세요.</div>', unsafe_allow_html=True)
 
 
 def show_user(text: str) -> None:
     """사용자 메시지를 즉시 화면에 보여준다 (전송 직후 바로 보이도록)."""
-    with st.chat_message("user"):
+    with st.chat_message("user", avatar=USER_AVATAR):
         st.write(text)
 
 
 def show_assistant(text: str) -> None:
     """AI 메시지를 한 번에 보여준다 (근거 부족 안내 등 스트리밍 아닌 경우)."""
-    with st.chat_message("assistant"):
+    with st.chat_message("assistant", avatar=BOT_AVATAR):
         st.write(text)
 
 
 def stream_assistant(token_generator) -> str:
     """AI 답변을 실시간으로 흘려보내며 보여준다. 완성된 전체 텍스트를 돌려준다."""
-    with st.chat_message("assistant"):
+    with st.chat_message("assistant", avatar=BOT_AVATAR):
         return st.write_stream(token_generator)
+
+
+def quick_questions() -> str | None:
+    """추천 질문(문장형)을 입력창 위에 보여주고, 누른 질문을 돌려준다(없으면 None)."""
+    st.markdown('<div class="quick-label">이런 질문을 해보세요</div>', unsafe_allow_html=True)
+    for column, question in zip(st.columns(len(QUICK_QUESTIONS)), QUICK_QUESTIONS):
+        if column.button(question, key=f"quick_{question}", use_container_width=True):
+            return question
+    return None

@@ -271,47 +271,67 @@ def render_chat() -> None:
     participant_id = st.session_state["participant_id"]
     session_id = st.session_state["session_id"]
 
-    # 개인화 인사 (호칭이 있으면 호칭, 없으면 참여자 코드). 호칭은 화면에만 쓴다.
-    participant = database.get_participant(participant_id)
-    ui.greeting((participant or {}).get("display_name") or participant_id)
-
-    maybe_show_nudge(participant_id, session_id)
-
-    # 화면 상태가 아니라 DB에서 대화를 불러온다 → 새로고침해도 복원된다.
-    try:
-        messages = database.get_messages(session_id)
-    except Exception as exc:
-        database.log_technical_error(
-            "db_select_failed", f"get_messages: {exc}", participant_id, session_id
-        )
-        st.error("대화를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.")
-        return
-
-    sources_by_msg = st.session_state.get("sources_by_msg", {})
-    for message in messages:
-        with st.chat_message(message["role"]):
-            st.write(message["content"])
-            srcs = sources_by_msg.get(message.get("message_id"))
-            if srcs:
-                render_sources(message, srcs, participant_id, session_id)
-
-    if not messages:
-        st.info("아직 대화가 없습니다. 아래에 자유롭게 입력해 보세요.")
-
-    render_nudge_options(participant_id, session_id)
-    render_action_options(participant_id, session_id)
-    render_clarification_options(participant_id, session_id)
-
-    typed = st.chat_input("무엇이든 편하게 물어보세요. 예) 오늘 식단이 궁금해요")
-    if typed and typed.strip():
-        handle_question(typed.strip(), participant_id, session_id)
+    action = ui.header()          # 헤더를 그리고 눌린 동작을 돌려받는다
+    if action == "size":
+        st.session_state["large_text"] = not st.session_state.get("large_text", False)
         st.rerun()
+    if action == "exit":
+        for key in ("participant_id", "session_id", "nudge_checked", "nudge_options",
+                    "clarified_terms", "sources_by_msg", "pending_action", "clarify_pending"):
+            st.session_state.pop(key, None)
+        st.rerun()
+    if st.session_state.get("large_text"):
+        ui.apply_large_text()
+
+    today_col, chat_col = st.columns([0.31, 0.69], gap="large")
+    with today_col:
+        with st.container(key="today_card"):
+            ui.today_card()
+
+    with chat_col:
+        with st.container(key="conversation"):
+            ui.conversation_top()
+            maybe_show_nudge(participant_id, session_id)
+            # 화면 상태가 아니라 DB에서 대화를 불러온다 → 새로고침해도 복원된다.
+            try:
+                messages = database.get_messages(session_id)
+            except Exception as exc:
+                database.log_technical_error("db_select_failed", f"get_messages: {exc}",
+                                             participant_id, session_id)
+                st.error("대화를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.")
+                return
+            sources_by_msg = st.session_state.get("sources_by_msg", {})
+            for message in messages:
+                avatar = ui.USER_AVATAR if message["role"] == "user" else ui.BOT_AVATAR
+                with st.chat_message(message["role"], avatar=avatar):
+                    st.write(message["content"])
+                    srcs = sources_by_msg.get(message.get("message_id"))
+                    if srcs:
+                        render_sources(message, srcs, participant_id, session_id)
+
+            render_nudge_options(participant_id, session_id)
+            render_action_options(participant_id, session_id)
+            render_clarification_options(participant_id, session_id)
+
+            if not messages:   # 첫 화면에서만 추천 질문(문장형)을 보조로 제시
+                picked = ui.quick_questions()
+                if picked:
+                    handle_question(picked, participant_id, session_id, source="suggested")
+                    st.rerun()
+            typed = st.chat_input("건강에 관해 궁금한 점을 편하게 물어보세요")
+            if typed and typed.strip():
+                handle_question(typed.strip(), participant_id, session_id, source="typed")
+                st.rerun()
+            ui.medical_note()
 
 
-def handle_question(question: str, participant_id: str, session_id: str) -> None:
-    """사용자 질문 하나를 처리한다 (입력창·추천카드 공용). 화면 갱신은 호출부가 한다.
+def handle_question(question: str, participant_id: str, session_id: str,
+                    source: str = "typed") -> None:
+    """사용자 질문 하나를 처리한다 (입력창·추천질문 공용). 화면 갱신은 호출부가 한다.
 
     잡담이면 따뜻한 응답, 아니면 질문 저장 → (모호하면 되묻기 / 아니면 근거 기반 답변).
+    source: 'typed'(직접 입력) / 'suggested'(추천 질문 클릭) — 연구 분석에서 자발적 질문만
+    따로 보기 위해 기록한다.
     """
     social = rag.detect_social(question)
     if social:
@@ -325,7 +345,7 @@ def handle_question(question: str, participant_id: str, session_id: str) -> None
     try:
         saved = database.save_message(session_id, participant_id, "user", "rag_question", question)
         database.log_event("question_asked", participant_id, session_id,
-                           related_message_id=saved["message_id"])
+                           payload={"source": source}, related_message_id=saved["message_id"])
     except Exception as exc:
         database.log_technical_error("db_insert_failed", f"save_message: {exc}",
                                      participant_id, session_id)
