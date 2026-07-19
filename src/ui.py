@@ -9,10 +9,10 @@ import streamlit as st
 
 
 def brand(compact: bool = False) -> None:
-    """서비스 브랜드 마크 '온 / 오늘도 건강'."""
+    """서비스 브랜드 마크 '당 / 당뇨 건강 도우미'."""
     cls = " compact" if compact else ""
     st.markdown(
-        f'<div class="brand{cls}"><span class="brand-mark">온</span><span>오늘도 건강</span></div>',
+        f'<div class="brand{cls}"><span class="brand-mark">당</span><span>당뇨 건강 도우미</span></div>',
         unsafe_allow_html=True)
 
 

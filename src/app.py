@@ -13,7 +13,7 @@ import nudge
 import rag
 import ui
 
-st.set_page_config(page_title="오늘도 건강", page_icon="🌿", layout="wide",
+st.set_page_config(page_title="당뇨 건강 도우미", page_icon="🌿", layout="wide",
                    initial_sidebar_state="collapsed")
 
 
