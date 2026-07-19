@@ -13,7 +13,8 @@ import nudge
 import rag
 import ui
 
-st.set_page_config(page_title="당뇨 건강 도우미", page_icon="💙", layout="centered")
+st.set_page_config(page_title="오늘도 건강", page_icon="🌿", layout="wide",
+                   initial_sidebar_state="collapsed")
 
 
 def apply_theme() -> None:
@@ -52,17 +53,26 @@ def start_session(participant_id: str) -> None:
 
 
 def render_login() -> None:
-    st.title("당뇨 건강 도우미")
-    st.write("참여자 코드를 입력해 주세요.")
-
-    with st.form("login_form"):
-        code = st.text_input("참여자 코드", placeholder="예: P001")
-        submitted = st.form_submit_button("시작하기")
+    ui.login_decor()
+    st.markdown('<div class="login-spacer"></div>', unsafe_allow_html=True)
+    welcome_col, form_col = st.columns([1.08, 0.92], gap="large", vertical_alignment="center")
+    with welcome_col:
+        ui.login_welcome()
+    with form_col:
+        with st.container(key="login_card"):
+            ui.login_card_intro()
+            with st.form("login_form", border=False):
+                typed = st.text_input("참여자 코드", placeholder="예: P001",
+                                      help="영문과 숫자를 안내받은 그대로 입력해 주세요.")
+                submitted = st.form_submit_button("건강 대화 시작하기  →",
+                                                  use_container_width=True, type="primary")
+            ui.login_privacy()
+    ui.login_footer()
 
     if not submitted:
         return
 
-    code = code.strip().upper()
+    code = typed.strip().upper()
     if not code:
         st.warning("참여자 코드를 입력해 주세요.")
         return

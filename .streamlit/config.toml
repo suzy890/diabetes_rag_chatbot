@@ -1,8 +1,11 @@
-# Streamlit 테마 — 고령 참여자 접근성 (차분·고대비)
-# 색·폰트만 여기서 정하고, 글씨 크기·버튼 등 세부는 assets/style.css 에서 조정한다.
+# Streamlit 테마 — '오늘도 건강' 디자인 (차분한 초록·민트, 고령 접근성)
+# 색은 여기서, 글씨 크기·레이아웃·말풍선 등 세부는 assets/style.css 에서 조정한다.
 [theme]
-primaryColor = "#0B6E99"            # 버튼·강조 (차분한 청록blue, 대비 충분)
-backgroundColor = "#FFFFFF"         # 배경 흰색 (밝고 깨끗)
-secondaryBackgroundColor = "#EAF2F6"  # 채팅 말풍선·입력창 (연한 하늘빛)
-textColor = "#16232E"               # 글자 진한 회남색 (높은 대비)
+primaryColor = "#4D8B78"            # 브랜드 초록 (버튼·강조)
+backgroundColor = "#F4F8F5"         # 은은한 배경
+secondaryBackgroundColor = "#F1F8F4"  # 카드·말풍선 바탕
+textColor = "#24342F"               # 진한 잉크색 (높은 대비)
 font = "sans serif"
+
+[browser]
+gatherUsageStats = false
