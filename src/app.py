@@ -192,11 +192,15 @@ def render_action_options(participant_id: str, session_id: str) -> None:
                    participant_id, session_id, "nudge_response")
     if not option:
         return
-    if option == nudge.COMMIT_OPTIONS[0]:      # '좋아요, 해볼게요' = 행동 약속
+    committed = option == nudge.COMMIT_OPTIONS[0]      # '좋아요, 해볼게요' = 행동 약속
+    if committed:
         database.set_action_commitment(pending["nudge_id"], pending["action"])
         database.log_event("action_committed", participant_id, session_id,
                            payload={"action": pending["action"]},
                            related_message_id=pending["message_id"])
+    # 약속/거절 뒤에 격려 + 질문 유도 피드백을 남긴다 (대화가 어색하게 끝나지 않도록).
+    database.save_message(session_id, participant_id, "assistant", "nudge",
+                          nudge.get_commit_feedback(committed))
     st.session_state.pop("pending_action", None)
     st.rerun()
 
@@ -222,13 +226,10 @@ def run_rag(question: str, participant_id: str, session_id: str, question_messag
             r = rag.retrieve(question, session_id, participant_id, question_message_id)
         titles = {d["document_id"]: d["title"] for d in database.list_documents()}
         selected = [{**c, "title": titles.get(c["document_id"], "문서")} for c in r["selected"]]
-        if r["evidence_level"] == "insufficient":
-            answer = rag.INSUFFICIENT_MSG
-            ui.show_assistant(answer)
-        else:
-            sysver = database.get_active_system_version_id()
-            answer = ui.stream_assistant(rag.answer_stream(
-                question, selected, r["evidence_level"], participant_id, question_message_id, sysver))
+        # 근거 부족(보류·무관질문 안내 포함)도 answer_stream이 처리한다 → 분기 일원화.
+        sysver = database.get_active_system_version_id()
+        answer = ui.stream_assistant(rag.answer_stream(
+            question, selected, r["evidence_level"], participant_id, question_message_id, sysver))
         msg = database.save_message(session_id, participant_id, "assistant", "rag_answer", answer)
         database.update_retrieval_answer(r["retrieval_id"], msg["message_id"])
         sources = [{"title": c["title"], "page": c.get("page_number")} for c in selected]

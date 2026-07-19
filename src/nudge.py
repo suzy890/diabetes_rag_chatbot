@@ -24,6 +24,14 @@ COMMIT_OPTIONS = _DATA["commit_options"]        # 행동 제안에 대한 약속
 TEMPLATES = _DATA["templates"]
 
 
+def get_commit_feedback(committed: bool) -> str:
+    """행동 약속 응답 뒤에 보여줄 격려 문구. committed=True면 칭찬, 아니면 위로.
+
+    끝에 질문을 유도한다("궁금한 점이 있으면 물어봐 주세요"). 승인 템플릿(자유생성 아님).
+    """
+    return _DATA["commit_feedback"]["committed" if committed else "declined"]
+
+
 def get_followup(template_key: str, response: str) -> str | None:
     """넛지 응답에 이어질 '행동 제안' 문구를 찾는다. 없으면 None (예: 거절·미완료 응답).
 

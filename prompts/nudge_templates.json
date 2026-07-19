@@ -1,9 +1,13 @@
 {
-  "_note": "넛지 승인 템플릿 (NUDGE_RULES.md §1-1). 문구를 바꾸면 template_version을 올린다. followups는 v0.2 제안 — 연구팀 확정 필요. 운동 제안은 '식후 가벼운 걷기' 수준의 일반 행동 상기까지만(의료 판단 금지).",
-  "template_version": "v0.2",
+  "_note": "넛지 승인 템플릿 (NUDGE_RULES.md §1-1). 문구를 바꾸면 template_version을 올린다. followups·commit_feedback은 제안 — 연구팀 확정 필요. 운동 제안은 '식후 가벼운 걷기' 수준의 일반 행동 상기까지만(의료 판단 금지).",
+  "template_version": "v0.3",
   "max_per_day": 3,
   "deferred_label": "나중에 답할게요",
   "commit_options": ["좋아요, 해볼게요", "조금 있다 할게요", "지금은 어려워요"],
+  "commit_feedback": {
+    "committed": "너무 좋은 선택이에요! 오늘도 건강을 잘 챙기고 계시네요, 정말 칭찬해요 👏\n\n혹시 궁금한 점이 있으면 언제든 편하게 물어봐 주세요.",
+    "declined": "괜찮아요, 오늘은 조금 힘드신가 봐요. 무리하지 않으셔도 돼요 😊 다음에 또 함께해요.\n\n혹시 궁금한 점이 있으면 언제든 편하게 물어봐 주세요."
+  },
   "templates": [
     {
       "key": "meal_breakfast", "start_hour": 6, "end_hour": 10,
