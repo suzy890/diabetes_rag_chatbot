@@ -315,7 +315,7 @@ def render_chat() -> None:
                 handle_question(typed.strip(), participant_id, session_id, source="typed")
                 st.rerun()
             ui.medical_note()
-            st.caption(f"build: sidebar-v3 · 지난 대화 {len(database.list_sessions(participant_id))}개")  # 배포 확인용(임시)
+            st.caption(f"build: sidebar-v4 · 지난 대화 {len(database.list_sessions(participant_id))}개")  # 배포 확인용(임시)
 
 
 def handle_question(question: str, participant_id: str, session_id: str,

@@ -30,9 +30,14 @@ html, body, [class*="css"] {
 }
 /* 데스크톱에선 사이드바를 접지 못하게 해 '못 여는 상태'로 갇히는 것을 막는다(항상 기록 보임).
    모바일(≤640px)에선 화면이 좁아 접기/펼치기를 그대로 둔다. */
+/* 데스크톱: 사이드바를 '항상 펼친 상태'로 강제 고정한다. Streamlit이 접으면 transform/여백으로
+   화면 밖으로 밀어 폭이 0처럼 보이는데(=자리는 보이나 내용이 안 보임), 이를 덮어써 늘 열어둔다. */
 @media (min-width: 641px) {
   [data-testid="stSidebarCollapseButton"] { display: none !important; }
-  [data-testid="stSidebar"] { min-width: 300px; }
+  [data-testid="stSidebar"], [data-testid="stSidebar"][aria-expanded="false"] {
+    transform: none !important; visibility: visible !important;
+    width: 320px !important; min-width: 320px !important; margin-left: 0 !important;
+  }
 }
 [data-testid="stAppViewContainer"] { background: #f4f8f5; }
 /* 메인 영역은 세로 스크롤 컨테이너로 유지(대화가 길어지면 내려서 봐야 함).
