@@ -206,7 +206,7 @@ def answer_stream(
         {"role": "user", "content": query_text},
     ]
     payload = {"model": config.LLM_MODEL, "messages": messages,
-               "temperature": config.LLM_TEMPERATURE, "max_tokens": 800}
+               "temperature": config.LLM_TEMPERATURE, "max_tokens": 1024}
     yield from llm_client.stream(payload, "rag_answer", system_version_id,
                                  participant_id, question_message_id)
 
