@@ -99,7 +99,9 @@ def header() -> str | None:
     with brand_col:
         brand(compact=True)
     with size_col:
-        clicked_size = st.button("가⁺  글자 크게", key="text_size", use_container_width=True)
+        big = st.session_state.get("large_text", False)   # 켜짐/꺼짐을 라벨로 알려준다
+        clicked_size = st.button("가⁻  글자 작게" if big else "가⁺  글자 크게",
+                                 key="text_size", use_container_width=True)
     with exit_col:
         clicked_exit = st.button("나가기", key="logout", use_container_width=True)
     st.markdown('<div class="header-rule"></div>', unsafe_allow_html=True)
@@ -107,10 +109,19 @@ def header() -> str | None:
 
 
 def apply_large_text() -> None:
-    """'글자 크게'가 켜졌을 때 말풍선·입력창 글씨를 키운다."""
-    st.markdown("<style>[data-testid='stChatMessageContent']{font-size:20px!important}"
-                "[data-testid='stChatInput'] textarea{font-size:19px!important}</style>",
-                unsafe_allow_html=True)
+    """'글자 크게'가 켜졌을 때 화면 전반의 글씨를 크게 키운다(고령 접근성). 말풍선만이 아니라
+    버튼·입력창·사이드바·추천질문까지 함께 키워야 실제로 커진 게 체감된다."""
+    st.markdown(
+        "<style>"
+        "[data-testid='stChatMessageContent'], [data-testid='stChatMessageContent'] *"
+        "{font-size:23px!important;line-height:1.75!important}"
+        "[data-testid='stChatInput'] textarea{font-size:21px!important}"
+        "[class*='st-key-'] button, .stButton button, [data-testid='stSidebar'] button"
+        "{font-size:19px!important}"
+        ".quick-label, .medical-note, .st-key-today_card p, .st-key-today_card h2"
+        "{font-size:18px!important}"
+        "</style>",
+        unsafe_allow_html=True)
 
 
 def today_card() -> None:
