@@ -54,15 +54,11 @@ def is_health_related(text: str) -> bool:
     return any(h in text for h in _social()["health_guard"])
 
 
-@lru_cache(maxsize=2)
+@lru_cache(maxsize=4)
 def _prompt(name: str) -> str:
     """prompts/<name>.md 시스템 프롬프트를 읽는다 (HTML 주석 헤더는 제외)."""
     text = (Path(__file__).resolve().parent.parent / "prompts" / f"{name}.md").read_text(encoding="utf-8")
     return text.split("-->", 1)[-1].strip()
-
-
-def _system_prompt() -> str:
-    return _prompt("rag_answer_system")
 
 
 def embed_query(
@@ -202,7 +198,7 @@ def answer_stream(
         f"[근거{i}] (출처: {c.get('title', '문서')} {c.get('page_number', '')}쪽)\n{c['content']}"
         for i, c in enumerate(selected, 1))
     messages = [
-        {"role": "system", "content": _system_prompt() + "\n\n[근거]\n" + evidence},
+        {"role": "system", "content": _prompt("rag_answer_system") + "\n\n[근거]\n" + evidence},
         {"role": "user", "content": query_text},
     ]
     payload = {"model": config.LLM_MODEL, "messages": messages,
@@ -227,8 +223,7 @@ def respond(
     # 비스트리밍 경로(테스트 등): 스트림을 모아 전체 답변을 만든다.
     answer = "".join(answer_stream(query_text, selected, r["evidence_level"],
                                    participant_id, question_message_id, sysver))
-    msg = database.save_message(session_id=session_id, participant_id=participant_id,
-                                role="assistant", message_type="rag_answer", content=answer)
+    msg = database.save_message(session_id, participant_id, "assistant", "rag_answer", answer)
     database.update_retrieval_answer(r["retrieval_id"], msg["message_id"])
 
     sources = [{"title": c["title"], "page": c.get("page_number")} for c in selected]

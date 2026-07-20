@@ -53,6 +53,7 @@ create table if not exists sessions (
     ended_at          timestamptz,
     device_type       text        check (device_type in ('mobile', 'tablet', 'desktop')),
     completion_status text        check (completion_status in ('normal', 'interrupted', 'error')),
+    title             text,                                  -- 대화 요약 제목(사이드바 라벨용, D45)
     -- events가 (session_id, participant_id) 복합 FK를 걸 수 있도록 하는 대상 키
     constraint sessions_session_participant_uniq unique (session_id, participant_id)
 );
@@ -249,7 +250,7 @@ create table if not exists model_calls (
     system_version_id  uuid        not null references system_versions(system_version_id),
     call_type          text        not null check (call_type in (
                            'rag_answer', 'nudge_rewrite', 'query_embedding',
-                           'document_embedding', 'safety_check')),
+                           'document_embedding', 'safety_check', 'title_summary')),
     provider           text,
     model_name         text,
     input_tokens       int,

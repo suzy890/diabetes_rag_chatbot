@@ -165,8 +165,8 @@ def stream_assistant(token_generator) -> str:
 
 
 def _session_label(session: dict, current: bool) -> str:
-    """지난 대화 라벨: 첫 질문(있으면)으로, 없으면 날짜로 (ChatGPT식 목록, D45)."""
-    preview = (session.get("preview") or "").strip()
+    """지난 대화 라벨: 요약 제목 > 첫 질문 > 날짜 순 (ChatGPT식 목록, D45)."""
+    preview = (session.get("title") or session.get("preview") or "").strip()
     if preview:
         text = preview[:22] + ("…" if len(preview) > 22 else "")
     else:

@@ -82,12 +82,12 @@ def find_open_session(participant_id: str) -> dict | None:
 
 
 def list_sessions(participant_id: str) -> list[dict]:
-    """참여자의 대화 세션을 최근 순으로. 각 세션에 '첫 질문'(preview)을 붙인다 (사이드바 라벨, D45)."""
+    """참여자의 대화 세션을 최근 순으로. 각 세션에 요약 제목(title)과 첫 질문(preview)을 붙인다 (D45)."""
     cli = get_client()
-    sessions = (cli.table("sessions").select("session_id, started_at")
+    sessions = (cli.table("sessions").select("session_id, started_at, title")
                 .eq("participant_id", participant_id).order("started_at", desc=True).execute().data)
     qs = (cli.table("messages").select("session_id, content")
-          .eq("participant_id", participant_id).in_("message_type", ["rag_question", "free_text"])
+          .eq("participant_id", participant_id).eq("message_type", "rag_question")
           .order("created_at").execute().data)
     first: dict[str, str] = {}
     for q in qs:
