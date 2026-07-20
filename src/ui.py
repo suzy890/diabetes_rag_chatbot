@@ -179,14 +179,15 @@ def sidebar_history(sessions: list[dict], current_id: str) -> str | None:
 
     누른 동작을 돌려준다 — "new"(새 대화 시작) | session_id(그 대화로 전환) | None.
     """
-    with st.sidebar:
-        st.markdown('<div class="side-title">💬 내 대화</div>', unsafe_allow_html=True)
-        if st.button("＋ 새 대화 시작", key="new_chat", use_container_width=True):
-            return "new"
-        for s in sessions:
-            if st.button(_session_label(s, s["session_id"] == current_id),
-                         key=f"sess_{s['session_id']}", use_container_width=True):
-                return s["session_id"]
+    sb = st.sidebar
+    sb.markdown("### 💬 내 대화")
+    if sb.button("＋ 새 대화 시작", key="new_chat", type="primary"):
+        return "new"
+    if not sessions:
+        sb.caption("아직 지난 대화가 없어요.")
+    for s in sessions:
+        if sb.button(_session_label(s, s["session_id"] == current_id), key=f"sess_{s['session_id']}"):
+            return s["session_id"]
     return None
 
 
