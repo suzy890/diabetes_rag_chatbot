@@ -1,6 +1,6 @@
 """Supabase 저장·조회 담당. 다른 모듈은 여기를 거쳐서만 DB에 접근한다 (architecture.md 규칙)."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from functools import lru_cache
 from typing import Any
 
@@ -61,20 +61,26 @@ def get_participant(participant_id: str) -> dict | None:
 
 
 def find_open_session(participant_id: str) -> dict | None:
-    """아직 끝나지 않았고 최근에 시작된 세션을 찾는다.
+    """참여자의 가장 최근 대화(세션)를 돌려준다. 없으면 None.
 
-    새로고침으로 세션이 중복 생성되는 것을 막는 핵심 장치다 (research-data.md).
+    재접속·새로고침 시 마지막 대화를 그대로 이어간다 (상용 서비스 친숙함, D45).
+    새 대화는 사이드바의 '새 대화'로 명시적으로 시작한다(시간 만료로 리셋하지 않음).
     """
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=config.SESSION_RESUME_HOURS)
     rows = (
         get_client().table("sessions").select("*")
         .eq("participant_id", participant_id)
         .is_("ended_at", "null")
-        .gte("started_at", cutoff.isoformat())
         .order("started_at", desc=True).limit(1)
         .execute().data
     )
     return rows[0] if rows else None
+
+
+def list_sessions(participant_id: str) -> list[dict]:
+    """참여자의 대화 세션을 최근 순으로 돌려준다 (사이드바 히스토리용, D45)."""
+    return (get_client().table("sessions").select("session_id, started_at")
+            .eq("participant_id", participant_id)
+            .order("started_at", desc=True).execute().data)
 
 
 def create_session(participant_id: str, device_type: str | None = None) -> dict:

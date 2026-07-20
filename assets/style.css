@@ -138,6 +138,14 @@ html, body, [class*="css"] {
 [data-testid="stExpander"] { margin-top: 10px; border-color: #c6ddd1; border-radius: 11px; background: white; }
 .medical-note { margin-top: 8px; text-align: center; color: #8b9691; font-size: 11px; }
 
+/* 왼쪽 대화 히스토리 사이드바 (D45) — 과거 대화 이어보기 + 새 대화 */
+[data-testid="stSidebar"] { background: #eef5f0; border-right: 1px solid var(--line); }
+[data-testid="stSidebar"] .side-title { margin: 4px 4px 14px; font-size: 15px; font-weight: 800; color: var(--green-dark); }
+.st-key-new_chat button { min-height: 48px; border: 0; border-radius: 13px; background: var(--green); color: white; font-size: 15px; font-weight: 800; margin-bottom: 10px; }
+.st-key-new_chat button:hover { background: var(--green-dark); color: white; }
+[class*="st-key-sess_"] button { min-height: 44px; border: 1px solid var(--line); border-radius: 11px; background: white; color: var(--ink); font-size: 14px; font-weight: 650; justify-content: flex-start; margin-bottom: 5px; }
+[class*="st-key-sess_"] button:hover { border-color: var(--green); background: var(--mint-light); }
+
 button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible {
   outline: 4px solid rgba(77, 139, 120, 0.25) !important; outline-offset: 3px !important;
 }

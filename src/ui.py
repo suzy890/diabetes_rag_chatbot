@@ -159,6 +159,34 @@ def stream_assistant(token_generator) -> str:
         return st.write_stream(token_generator)
 
 
+def _session_label(session: dict, current: bool) -> str:
+    """지난 대화 한 건의 라벨. 첫 질문 미리보기 대신 날짜·시간으로 단순하게(고령 가독성)."""
+    raw = (session.get("started_at") or "").replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(raw).astimezone(ZoneInfo("Asia/Seoul"))
+        ampm = "오전" if dt.hour < 12 else "오후"
+        text = f"{dt.month}월 {dt.day}일 {ampm} {dt.hour % 12 or 12}시"
+    except ValueError:
+        text = "지난 대화"
+    return ("🟢 " if current else "🗨 ") + text
+
+
+def sidebar_history(sessions: list[dict], current_id: str) -> str | None:
+    """왼쪽 사이드바: '새 대화' 버튼 + 지난 대화 목록(최근 순). 과거 대화가 사라지지 않게(D45).
+
+    누른 동작을 돌려준다 — "new"(새 대화 시작) | session_id(그 대화로 전환) | None.
+    """
+    with st.sidebar:
+        st.markdown('<div class="side-title">💬 내 대화</div>', unsafe_allow_html=True)
+        if st.button("＋ 새 대화 시작", key="new_chat", use_container_width=True):
+            return "new"
+        for s in sessions:
+            if st.button(_session_label(s, s["session_id"] == current_id),
+                         key=f"sess_{s['session_id']}", use_container_width=True):
+                return s["session_id"]
+    return None
+
+
 def quick_questions() -> str | None:
     """추천 질문(문장형)을 입력창 위에 보여주고, 누른 질문을 돌려준다(없으면 None)."""
     st.markdown('<div class="quick-label">이런 질문을 해보세요</div>', unsafe_allow_html=True)

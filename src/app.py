@@ -14,7 +14,7 @@ import rag
 import ui
 
 st.set_page_config(page_title="당뇨 건강 도우미", page_icon="🌿", layout="wide",
-                   initial_sidebar_state="collapsed")
+                   initial_sidebar_state="auto")
 
 
 def apply_theme() -> None:
@@ -268,6 +268,17 @@ def render_chat() -> None:
         st.rerun()
     if st.session_state.get("large_text"):
         ui.apply_large_text()
+
+    # 왼쪽 사이드바: 지난 대화 이어보기 / 새 대화 시작 (히스토리 지속, D45)
+    picked = ui.sidebar_history(database.list_sessions(participant_id), session_id)
+    if picked == "new":
+        picked = database.create_session(participant_id)["session_id"]
+        database.log_event("session_started", participant_id, picked)
+    if picked:
+        for key in ("nudge_options", "pending_action", "clarify_pending"):
+            st.session_state.pop(key, None)
+        st.session_state["session_id"] = picked
+        st.rerun()
 
     today_col, chat_col = st.columns([0.31, 0.69], gap="large")
     with today_col:
