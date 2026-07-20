@@ -242,7 +242,7 @@ def render_clarification_options(participant_id: str, session_id: str) -> None:
         question = pending["question"]
     else:
         question = pending["question"] + " (공복혈당 식후혈당)"
-    run_rag(question, participant_id, session_id, pending["question_message_id"])
+    st.session_state["pending_answer"] = {"q": question, "qid": pending["question_message_id"]}
     st.session_state.pop("clarify_pending", None)
     st.rerun()
 
@@ -301,8 +301,13 @@ def render_chat() -> None:
             render_action_options(participant_id, session_id)
             render_clarification_options(participant_id, session_id)
 
-            # 사용자가 아직 질문을 안 했으면 추천 질문을 제시한다. (넛지가 항상 메시지로
-            # 먼저 저장돼 messages는 늘 비어있지 않으므로, '메시지 유무'가 아니라 '질문 유무'로 판단)
+            # 대기 중인 답변은 대화 영역 안(=입력창 위)에서 스트리밍한다. 입력창을 컨테이너 밖
+            # 최상위에 둬 하단 고정하므로, 새 질문·답변이 항상 입력창 위로 쌓인다.
+            answer = st.session_state.pop("pending_answer", None)
+            if answer:
+                run_rag(answer["q"], participant_id, session_id, answer["qid"])
+
+            # 아직 질문을 안 했으면 추천 질문을 제시한다('메시지 유무'가 아니라 '질문 유무'로 판단)
             asked = any(m["role"] == "user" and m.get("message_type") == "rag_question"
                         for m in messages)
             if not asked:
@@ -310,11 +315,13 @@ def render_chat() -> None:
                 if picked:
                     handle_question(picked, participant_id, session_id, source="suggested")
                     st.rerun()
-            typed = st.chat_input("건강에 관해 궁금한 점을 편하게 물어보세요")
-            if typed and typed.strip():
-                handle_question(typed.strip(), participant_id, session_id, source="typed")
-                st.rerun()
             ui.medical_note()
+
+    # 입력창은 컨테이너 밖(최상위)에 둬야 Streamlit이 화면 하단에 고정한다.
+    typed = st.chat_input("건강에 관해 궁금한 점을 편하게 물어보세요")
+    if typed and typed.strip():
+        handle_question(typed.strip(), participant_id, session_id, source="typed")
+        st.rerun()
 
 
 def handle_question(question: str, participant_id: str, session_id: str,
@@ -355,8 +362,8 @@ def handle_question(question: str, participant_id: str, session_id: str,
             "term": clarify["term"], "options": clarify["options"], "question": question,
             "question_message_id": saved["message_id"], "clarify_message_id": cmsg["message_id"]}
     else:
-        ui.show_user(question)   # 질문을 즉시 보여준 뒤 답변을 스트리밍한다
-        run_rag(question, participant_id, session_id, saved["message_id"])
+        # 답변은 여기서 바로 만들지 않고, 대화 영역 안(입력창 위)에서 스트리밍하도록 예약한다.
+        st.session_state["pending_answer"] = {"q": question, "qid": saved["message_id"]}
 
 
 apply_theme()
