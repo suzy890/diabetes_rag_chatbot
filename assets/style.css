@@ -28,6 +28,12 @@ html, body, [class*="css"] {
 [data-testid="stExpandSidebarButton"], [data-testid="stSidebarCollapseButton"] {
   display: flex !important; visibility: visible !important; z-index: 1001;
 }
+/* 데스크톱에선 사이드바를 접지 못하게 해 '못 여는 상태'로 갇히는 것을 막는다(항상 기록 보임).
+   모바일(≤640px)에선 화면이 좁아 접기/펼치기를 그대로 둔다. */
+@media (min-width: 641px) {
+  [data-testid="stSidebarCollapseButton"] { display: none !important; }
+  [data-testid="stSidebar"] { min-width: 300px; }
+}
 [data-testid="stAppViewContainer"] { background: #f4f8f5; }
 /* 메인 영역은 세로 스크롤 컨테이너로 유지(대화가 길어지면 내려서 봐야 함).
    가로는 숨겨 full-bleed 요소(header-rule 등)로 가로 스크롤이 생기지 않게 한다. */
