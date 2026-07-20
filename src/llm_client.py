@@ -13,6 +13,34 @@ import httpx
 import config
 import database
 
+# 무료 NIM 티어는 큰 모델(550B) 혼잡 시 간헐적으로 5xx/429를 낸다 → 잠깐 쉬고 재시도.
+_TRANSIENT_STATUS = {429, 500, 502, 503, 504}
+_MAX_RETRIES = 2       # 최초 1회 + 재시도 2회
+_RETRY_WAIT = 1.5      # 재시도 전 대기(초), 시도마다 늘어남
+
+
+def _is_transient(exc: Exception) -> bool:
+    """잠깐 쉬고 재시도하면 될 일시적 오류인가 — 혼잡·일시중단(429·5xx)·연결·타임아웃."""
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code in _TRANSIENT_STATUS
+    return isinstance(exc, (httpx.TimeoutException, httpx.TransportError))
+
+
+def _post_json(path: str, payload: dict) -> dict:
+    """POST 후 JSON을 돌려준다. 일시적 오류(무료 티어 혼잡 등)는 잠깐 쉬고 재시도한다."""
+    for attempt in range(_MAX_RETRIES + 1):
+        try:
+            r = httpx.post(f"{config.NVIDIA_BASE_URL}/{path}",
+                           headers={"Authorization": f"Bearer {config.LLM_API_KEY}"},
+                           json=payload, timeout=90.0)
+            r.raise_for_status()
+            return r.json()
+        except Exception as exc:
+            if attempt < _MAX_RETRIES and _is_transient(exc):
+                time.sleep(_RETRY_WAIT * (attempt + 1))
+                continue
+            raise
+
 
 def call(path: str, payload: dict, call_type: str, system_version_id: str,
          participant_id: str | None = None, message_id: str | None = None) -> dict:
@@ -20,11 +48,7 @@ def call(path: str, payload: dict, call_type: str, system_version_id: str,
     started = time.perf_counter()
     status, itok, otok = "success", 0, 0
     try:
-        r = httpx.post(f"{config.NVIDIA_BASE_URL}/{path}",
-                       headers={"Authorization": f"Bearer {config.LLM_API_KEY}"},
-                       json=payload, timeout=90.0)
-        r.raise_for_status()
-        body = r.json()
+        body = _post_json(path, payload)
         usage = body.get("usage", {})
         itok = usage.get("prompt_tokens") or usage.get("total_tokens", 0)
         otok = usage.get("completion_tokens", 0)
@@ -50,24 +74,35 @@ def stream(payload: dict, call_type: str, system_version_id: str,
     started = time.perf_counter()
     status, itok, otok = "success", 0, 0
     try:
-        with httpx.stream("POST", f"{config.NVIDIA_BASE_URL}/chat/completions",
-                          headers={"Authorization": f"Bearer {config.LLM_API_KEY}"},
-                          json=payload, timeout=120.0) as r:
-            r.raise_for_status()
-            for line in r.iter_lines():
-                if not line.startswith("data: "):
+        for attempt in range(_MAX_RETRIES + 1):
+            yielded = False
+            try:
+                with httpx.stream("POST", f"{config.NVIDIA_BASE_URL}/chat/completions",
+                                  headers={"Authorization": f"Bearer {config.LLM_API_KEY}"},
+                                  json=payload, timeout=120.0) as r:
+                    r.raise_for_status()
+                    for line in r.iter_lines():
+                        if not line.startswith("data: "):
+                            continue
+                        data = line[6:]
+                        if data == "[DONE]":
+                            break
+                        obj = json.loads(data)
+                        if obj.get("usage"):
+                            itok = obj["usage"].get("prompt_tokens", 0)
+                            otok = obj["usage"].get("completion_tokens", 0)
+                        for choice in obj.get("choices", []):
+                            delta = choice.get("delta", {}).get("content")
+                            if delta:
+                                yielded = True
+                                yield delta
+                return
+            except Exception as exc:
+                # 이미 답변 일부를 내보냈으면 중간이라 재시도 불가 → 그대로 실패.
+                if not yielded and attempt < _MAX_RETRIES and _is_transient(exc):
+                    time.sleep(_RETRY_WAIT * (attempt + 1))
                     continue
-                data = line[6:]
-                if data == "[DONE]":
-                    break
-                obj = json.loads(data)
-                if obj.get("usage"):
-                    itok = obj["usage"].get("prompt_tokens", 0)
-                    otok = obj["usage"].get("completion_tokens", 0)
-                for choice in obj.get("choices", []):
-                    delta = choice.get("delta", {}).get("content")
-                    if delta:
-                        yield delta
+                raise
     except Exception:
         status = "failure"
         raise

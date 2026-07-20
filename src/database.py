@@ -13,6 +13,11 @@ import config
 _TABLE_MISSING_HINTS = ("PGRST205", "does not exist", "Could not find the table")
 
 
+def _row(**fields: Any) -> dict:
+    """None이 아닌 필드만 남긴 행 dict을 만든다 (선택적 컬럼 처리 반복을 한 곳에)."""
+    return {k: v for k, v in fields.items() if v is not None}
+
+
 @lru_cache(maxsize=1)
 def get_client() -> Client:
     """Supabase 클라이언트를 만든다 (한 번만 생성해 재사용)."""
@@ -77,20 +82,25 @@ def find_open_session(participant_id: str) -> dict | None:
 
 
 def list_sessions(participant_id: str) -> list[dict]:
-    """참여자의 대화 세션을 최근 순으로 돌려준다 (사이드바 히스토리용, D45)."""
-    return (get_client().table("sessions").select("session_id, started_at")
-            .eq("participant_id", participant_id)
-            .order("started_at", desc=True).execute().data)
+    """참여자의 대화 세션을 최근 순으로. 각 세션에 '첫 질문'(preview)을 붙인다 (사이드바 라벨, D45)."""
+    cli = get_client()
+    sessions = (cli.table("sessions").select("session_id, started_at")
+                .eq("participant_id", participant_id).order("started_at", desc=True).execute().data)
+    qs = (cli.table("messages").select("session_id, content")
+          .eq("participant_id", participant_id).in_("message_type", ["rag_question", "free_text"])
+          .order("created_at").execute().data)
+    first: dict[str, str] = {}
+    for q in qs:
+        first.setdefault(q["session_id"], q["content"])
+    for s in sessions:
+        s["preview"] = first.get(s["session_id"])
+    return sessions
 
 
 def create_session(participant_id: str, device_type: str | None = None) -> dict:
     """새 접속 세션을 만든다."""
-    row: dict[str, Any] = {
-        "participant_id": participant_id,
-        "system_version_id": get_active_system_version_id(),
-    }
-    if device_type:
-        row["device_type"] = device_type
+    row = _row(participant_id=participant_id,
+               system_version_id=get_active_system_version_id(), device_type=device_type)
     return get_client().table("sessions").insert(row).execute().data[0]
 
 
@@ -140,18 +150,9 @@ def log_event(
 
     participant_id·session_id는 인증 전 이벤트(app_opened)에서는 비어 있을 수 있다.
     """
-    row: dict[str, Any] = {
-        "event_type": event_type,
-        "system_version_id": get_active_system_version_id(),
-    }
-    if participant_id:
-        row["participant_id"] = participant_id
-    if session_id:
-        row["session_id"] = session_id
-    if payload:
-        row["payload_json"] = payload
-    if related_message_id:
-        row["related_message_id"] = related_message_id
+    row = _row(event_type=event_type, system_version_id=get_active_system_version_id(),
+               participant_id=participant_id, session_id=session_id,
+               payload_json=payload, related_message_id=related_message_id)
     get_client().table("events").insert(row).execute()
 
 
@@ -245,11 +246,8 @@ def log_technical_error(
     사용자의 무응답이 '무관심'인지 '시스템 실패'인지 구분하기 위함이다.
     오류 기록 자체가 실패해도 앱을 멈추지는 않는다.
     """
-    row: dict[str, Any] = {"error_type": error_type, "error_message": error_message[:2000]}
-    if participant_id:
-        row["participant_id"] = participant_id
-    if session_id:
-        row["session_id"] = session_id
+    row = _row(error_type=error_type, error_message=error_message[:2000],
+               participant_id=participant_id, session_id=session_id)
     try:
         get_client().table("technical_errors").insert(row).execute()
     except Exception:
@@ -274,16 +272,10 @@ def log_model_call(
     related_message_id: str | None = None,
 ) -> None:
     """외부 API 호출의 토큰·지연시간·상태를 model_calls에 남긴다 (비용 추적)."""
-    row: dict[str, Any] = {
-        "call_type": call_type, "system_version_id": system_version_id,
-        "provider": provider, "model_name": model_name,
-        "input_tokens": input_tokens, "output_tokens": output_tokens,
-        "latency_ms": latency_ms, "status": status,
-    }
-    if participant_id:
-        row["participant_id"] = participant_id
-    if related_message_id:
-        row["related_message_id"] = related_message_id
+    row = _row(call_type=call_type, system_version_id=system_version_id,
+               provider=provider, model_name=model_name, input_tokens=input_tokens,
+               output_tokens=output_tokens, latency_ms=latency_ms, status=status,
+               participant_id=participant_id, related_message_id=related_message_id)
     get_client().table("model_calls").insert(row).execute()
 
 
@@ -323,14 +315,11 @@ def save_retrieval_log(
     answer_message_id: str | None = None,
 ) -> str:
     """검색 1회를 retrieval_logs에 1행 저장하고 retrieval_id를 돌려준다 (D15)."""
-    row: dict[str, Any] = {
-        "session_id": session_id, "participant_id": participant_id,
-        "question_message_id": question_message_id, "system_version_id": system_version_id,
-        "query_text": query_text, "embedding_model": embedding_model, "top_k": top_k,
-        "knowledge_base_version": knowledge_base_version, "evidence_level": evidence_level,
-    }
-    if answer_message_id:
-        row["answer_message_id"] = answer_message_id
+    row = _row(session_id=session_id, participant_id=participant_id,
+               question_message_id=question_message_id, system_version_id=system_version_id,
+               query_text=query_text, embedding_model=embedding_model, top_k=top_k,
+               knowledge_base_version=knowledge_base_version, evidence_level=evidence_level,
+               answer_message_id=answer_message_id)
     return get_client().table("retrieval_logs").insert(row).execute().data[0]["retrieval_id"]
 
 

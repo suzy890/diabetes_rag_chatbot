@@ -21,7 +21,13 @@ html, body, [class*="css"] {
   letter-spacing: -0.02em;
 }
 
-[data-testid="stHeader"], [data-testid="stToolbar"], footer { display: none !important; }
+/* 헤더 전체를 숨기면 사이드바 여는 버튼(stExpandSidebarButton)까지 사라져 못 여는 문제가 생긴다.
+   → 헤더는 두되(투명·높이 0) 툴바·데코만 숨기고, 사이드바 토글은 항상 보이게 한다. */
+[data-testid="stToolbar"], [data-testid="stDecoration"], footer { display: none !important; }
+[data-testid="stHeader"] { background: transparent; height: 0; }
+[data-testid="stExpandSidebarButton"], [data-testid="stSidebarCollapseButton"] {
+  display: flex !important; visibility: visible !important; z-index: 1000;
+}
 [data-testid="stAppViewContainer"] { background: #f4f8f5; }
 /* 메인 영역은 세로 스크롤 컨테이너로 유지(대화가 길어지면 내려서 봐야 함).
    가로는 숨겨 full-bleed 요소(header-rule 등)로 가로 스크롤이 생기지 않게 한다. */

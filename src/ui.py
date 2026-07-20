@@ -160,14 +160,17 @@ def stream_assistant(token_generator) -> str:
 
 
 def _session_label(session: dict, current: bool) -> str:
-    """지난 대화 한 건의 라벨. 첫 질문 미리보기 대신 날짜·시간으로 단순하게(고령 가독성)."""
-    raw = (session.get("started_at") or "").replace("Z", "+00:00")
-    try:
-        dt = datetime.fromisoformat(raw).astimezone(ZoneInfo("Asia/Seoul"))
-        ampm = "오전" if dt.hour < 12 else "오후"
-        text = f"{dt.month}월 {dt.day}일 {ampm} {dt.hour % 12 or 12}시"
-    except ValueError:
-        text = "지난 대화"
+    """지난 대화 라벨: 첫 질문(있으면)으로, 없으면 날짜로 (ChatGPT식 목록, D45)."""
+    preview = (session.get("preview") or "").strip()
+    if preview:
+        text = preview[:22] + ("…" if len(preview) > 22 else "")
+    else:
+        raw = (session.get("started_at") or "").replace("Z", "+00:00")
+        try:
+            dt = datetime.fromisoformat(raw).astimezone(ZoneInfo("Asia/Seoul"))
+            text = f"{dt.month}월 {dt.day}일 대화"
+        except ValueError:
+            text = "지난 대화"
     return ("🟢 " if current else "🗨 ") + text
 
 
