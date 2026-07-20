@@ -35,21 +35,26 @@ def log_app_opened_once() -> None:
     st.session_state["app_opened_logged"] = True
 
 
+def _fail(error_type: str, detail: str, user_msg: str,
+          participant_id: str | None = None, session_id: str | None = None) -> None:
+    """실패를 기술 오류로 기록하고 사용자에게 안내한다 (여러 곳의 반복 처리를 한 곳에)."""
+    database.log_technical_error(error_type, detail, participant_id, session_id)
+    st.error(user_msg)
+
+
+def _new_session(participant_id: str) -> str:
+    """새 대화 세션을 만들고 session_started를 기록한 뒤 session_id를 돌려준다."""
+    sid = database.create_session(participant_id)["session_id"]
+    database.log_event("session_started", participant_id, sid)
+    return sid
+
+
 def start_session(participant_id: str) -> None:
-    """세션을 새로 만들거나, 최근에 열린 세션을 이어받는다.
-
-    새로고침해도 세션이 중복 생성되지 않도록 기존 세션을 먼저 찾는다.
-    """
+    """가장 최근 세션을 이어받거나, 없으면 새로 만든다 (새로고침 시 중복 생성 방지)."""
     session = database.find_open_session(participant_id)
-    is_new = session is None
-    if is_new:
-        session = database.create_session(participant_id)
-
+    sid = session["session_id"] if session else _new_session(participant_id)
     st.session_state["participant_id"] = participant_id
-    st.session_state["session_id"] = session["session_id"]
-
-    if is_new:
-        database.log_event("session_started", participant_id, session["session_id"])
+    st.session_state["session_id"] = sid
 
 
 def render_login() -> None:
@@ -65,8 +70,7 @@ def render_login() -> None:
     try:
         participant = database.get_participant(code)
     except Exception as exc:
-        database.log_technical_error("db_select_failed", f"get_participant: {exc}")
-        st.error("일시적인 오류가 생겼습니다. 잠시 후 다시 시도해 주세요.")
+        _fail("db_select_failed", f"get_participant: {exc}", "일시적인 오류가 생겼습니다. 잠시 후 다시 시도해 주세요.")
         return
 
     if participant is None:
@@ -80,8 +84,7 @@ def render_login() -> None:
     try:
         start_session(code)
     except Exception as exc:
-        database.log_technical_error("db_insert_failed", f"start_session: {exc}", participant_id=code)
-        st.error("접속을 시작하지 못했습니다. 잠시 후 다시 시도해 주세요.")
+        _fail("db_insert_failed", f"start_session: {exc}", "접속을 시작하지 못했습니다. 잠시 후 다시 시도해 주세요.", code)
         return
 
     st.rerun()
@@ -102,7 +105,7 @@ def maybe_show_nudge(participant_id: str, session_id: str) -> None:
         message = database.save_message(
             session_id, participant_id, "assistant", "nudge", template["text"]
         )
-        record = database.create_nudge(
+        database.create_nudge(
             participant_id, session_id,
             {**template, "template_version": nudge.TEMPLATE_VERSION},
             message["message_id"],
@@ -113,8 +116,6 @@ def maybe_show_nudge(participant_id: str, session_id: str) -> None:
             payload={"template_key": template["key"]},
             related_message_id=message["message_id"],
         )
-        st.session_state["nudge_options"] = template["options"]
-        st.session_state["nudge_id"] = record["nudge_id"]
     except Exception as exc:
         database.log_technical_error(
             "nudge_failed", f"maybe_show_nudge: {exc}", participant_id, session_id
@@ -135,9 +136,7 @@ def _pick(options: list[str], key_prefix: str,
             database.save_message(session_id, participant_id, "user", message_type, option)
             return option
         except Exception as exc:
-            database.log_technical_error("db_insert_failed", f"{key_prefix}: {exc}",
-                                         participant_id, session_id)
-            st.error("응답을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.")
+            _fail("db_insert_failed", f"{key_prefix}: {exc}", "응답을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.", participant_id, session_id)
             return None
     return None
 
@@ -147,18 +146,14 @@ def render_nudge_options(participant_id: str, session_id: str) -> None:
     pending = database.get_unanswered_nudge(participant_id, session_id)
     if not pending:
         return
-    options = st.session_state.get("nudge_options")
-    if not options:
-        template = next((t for t in nudge.TEMPLATES if t["key"] == pending["template_key"]), None)
-        options = template["options"] if template else None
-    if not options:
+    template = next((t for t in nudge.TEMPLATES if t["key"] == pending["template_key"]), None)
+    if not template:
         return
-    option = _pick(options, f"nudge_{pending['nudge_id']}", participant_id, session_id, "nudge_response")
+    option = _pick(template["options"], f"nudge_{pending['nudge_id']}", participant_id, session_id, "nudge_response")
     if not option:
         return
     database.record_nudge_response(pending["nudge_id"], option)
     database.log_event("nudge_answered", participant_id, session_id, payload={"response": option})
-    st.session_state.pop("nudge_options", None)
     # 넛지의 핵심 — 응답에 이어질 '작은 행동' 제안이 있으면 바로 이어서 보여준다.
     followup = nudge.get_followup(pending["template_key"], option)
     if followup:
@@ -220,8 +215,7 @@ def run_rag(question: str, participant_id: str, session_id: str, question_messag
         sources = [{"title": c["title"], "page": c.get("page_number")} for c in selected]
         st.session_state.setdefault("sources_by_msg", {})[msg["message_id"]] = sources
     except Exception as exc:
-        database.log_technical_error("rag_failed", f"stream: {exc}", participant_id, session_id)
-        st.error("답변을 만드는 중 문제가 생겼습니다. 잠시 후 다시 시도해 주세요.")
+        _fail("rag_failed", f"stream: {exc}", "답변을 만드는 중 문제가 생겼습니다. 잠시 후 다시 시도해 주세요.", participant_id, session_id)
 
 
 def render_clarification_options(participant_id: str, session_id: str) -> None:
@@ -262,8 +256,8 @@ def render_chat() -> None:
         st.session_state["large_text"] = not st.session_state.get("large_text", False)
         st.rerun()
     if action == "exit":
-        for key in ("participant_id", "session_id", "nudge_checked", "nudge_options",
-                    "clarified_terms", "sources_by_msg", "pending_action", "clarify_pending"):
+        for key in ("participant_id", "session_id", "nudge_checked", "clarified_terms",
+                    "sources_by_msg", "pending_action", "clarify_pending"):
             st.session_state.pop(key, None)
         st.rerun()
     if st.session_state.get("large_text"):
@@ -272,10 +266,9 @@ def render_chat() -> None:
     # 왼쪽 사이드바: 지난 대화 이어보기 / 새 대화 시작 (히스토리 지속, D45)
     picked = ui.sidebar_history(database.list_sessions(participant_id), session_id)
     if picked == "new":
-        picked = database.create_session(participant_id)["session_id"]
-        database.log_event("session_started", participant_id, picked)
+        picked = _new_session(participant_id)
     if picked:
-        for key in ("nudge_options", "pending_action", "clarify_pending"):
+        for key in ("pending_action", "clarify_pending"):
             st.session_state.pop(key, None)
         st.session_state["session_id"] = picked
         st.rerun()
@@ -293,9 +286,7 @@ def render_chat() -> None:
             try:
                 messages = database.get_messages(session_id)
             except Exception as exc:
-                database.log_technical_error("db_select_failed", f"get_messages: {exc}",
-                                             participant_id, session_id)
-                st.error("대화를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.")
+                _fail("db_select_failed", f"get_messages: {exc}", "대화를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.", participant_id, session_id)
                 return
             sources_by_msg = st.session_state.get("sources_by_msg", {})
             for message in messages:
@@ -348,9 +339,7 @@ def handle_question(question: str, participant_id: str, session_id: str,
         database.log_event("question_asked", participant_id, session_id,
                            payload={"source": source}, related_message_id=saved["message_id"])
     except Exception as exc:
-        database.log_technical_error("db_insert_failed", f"save_message: {exc}",
-                                     participant_id, session_id)
-        st.error("메시지를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.")
+        _fail("db_insert_failed", f"save_message: {exc}", "메시지를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.", participant_id, session_id)
         return
     # 용어가 모호하면(예: '혈당'이 순간값인지 당화혈색소인지) 추측하지 않고 되묻는다 (T2.10).
     clarify = rag.detect_clarification(question)
