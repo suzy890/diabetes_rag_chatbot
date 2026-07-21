@@ -126,6 +126,13 @@ def save_message(
     return get_client().table("messages").insert(row).execute().data[0]
 
 
+def session_has_activity(session_id: str) -> bool:
+    """세션에 사용자 발화(질문·응답)가 있었는지. 빈(넛지만 있거나 비어있는) 세션 재사용 판단용 (D45)."""
+    rows = (get_client().table("messages").select("message_id")
+            .eq("session_id", session_id).eq("role", "user").limit(1).execute().data)
+    return bool(rows)
+
+
 def get_messages(session_id: str) -> list[dict]:
     """세션의 대화를 시간순으로 불러온다.
 

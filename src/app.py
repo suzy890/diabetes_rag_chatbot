@@ -50,9 +50,11 @@ def _new_session(participant_id: str) -> str:
 
 
 def start_session(participant_id: str) -> None:
-    """가장 최근 세션을 이어받거나, 없으면 새로 만든다 (새로고침 시 중복 생성 방지)."""
-    session = database.find_open_session(participant_id)
-    sid = session["session_id"] if session else _new_session(participant_id)
+    """로그인 시 '새 대화'를 연다(거기서 넛지가 새로 인사한다). 단, 직전 세션이 비어 있으면
+    재사용해 새로고침으로 빈 세션이 쌓이는 것을 막는다. 지난 대화는 사이드바에서 이어본다 (D45/D48)."""
+    latest = database.find_open_session(participant_id)
+    sid = (latest["session_id"] if latest and not database.session_has_activity(latest["session_id"])
+           else _new_session(participant_id))
     st.session_state["participant_id"] = participant_id
     st.session_state["session_id"] = sid
 
@@ -267,6 +269,7 @@ def render_chat() -> None:
     picked = ui.sidebar_history(database.list_sessions(participant_id), session_id)
     if picked == "new":
         picked = _new_session(participant_id)
+        st.session_state.pop("nudge_checked", None)   # 새 대화에도 넛지를 다시 판단(있으면 표시)
     if picked:
         for key in ("pending_action", "clarify_pending"):
             st.session_state.pop(key, None)
