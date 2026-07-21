@@ -6,6 +6,7 @@
   수정·삭제 기능을 두지 않는다(데이터 무결성).
 - 참여자는 **익명 ID로만** 표시한다(직접식별정보 없음).
 - 이 앱은 참여자 앱의 핵심 500줄 로직에 포함되지 않는다(D22).
+- 시각화는 Streamlit 기본 포함 라이브러리 Altair를 쓴다(추가 의존성 없음).
 """
 
 import os
@@ -14,12 +15,17 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import altair as alt
 import pandas as pd
 import streamlit as st
 
 import database
 
 st.set_page_config(page_title="연구자 대시보드", page_icon="📊", layout="wide")
+
+GREEN = "#4d8b78"
+# 초록을 기본으로, 범주형(도넛 등)엔 파스텔 팔레트를 쓴다(참여자 앱 톤과 맞춤).
+PALETTE = ["#4d8b78", "#7cb7a1", "#f0b27a", "#d98c8c", "#9db8d2", "#c7a3d4"]
 
 
 def check_password() -> bool:
@@ -63,6 +69,38 @@ def rate(part: int, whole: int) -> str:
     return f"{part / whole * 100:.0f}%  ({part}/{whole})" if whole else "-"
 
 
+def kst_day(series: pd.Series) -> pd.Series:
+    """ISO 타임스탬프 열을 한국시간 기준 '날짜(자정)'로 바꾼다(일자별 추이용)."""
+    dt = pd.to_datetime(series, format="mixed", utc=True, errors="coerce")
+    return dt.dt.tz_convert("Asia/Seoul").dt.normalize().dt.tz_localize(None)
+
+
+def bar(df: pd.DataFrame, cat: str, val: str, horizontal: bool = True) -> alt.Chart:
+    """막대 차트. 기본은 가로 막대(범주 이름이 길어도 잘 읽힌다)."""
+    if horizontal:
+        enc = {"y": alt.Y(f"{cat}:N", sort="-x", title=None), "x": alt.X(f"{val}:Q", title=None)}
+    else:
+        enc = {"x": alt.X(f"{cat}:N", sort="-y", title=None), "y": alt.Y(f"{val}:Q", title=None)}
+    return (alt.Chart(df).mark_bar(color=GREEN, cornerRadius=3)
+            .encode(tooltip=list(df.columns), **enc).properties(height=260))
+
+
+def donut(df: pd.DataFrame, cat: str, val: str) -> alt.Chart:
+    """도넛 차트(범주 비율)."""
+    return (alt.Chart(df).mark_arc(innerRadius=62, stroke="white", strokeWidth=2)
+            .encode(theta=alt.Theta(f"{val}:Q"),
+                    color=alt.Color(f"{cat}:N", scale=alt.Scale(range=PALETTE),
+                                    legend=alt.Legend(title=None, orient="bottom")),
+                    tooltip=[cat, val]).properties(height=260))
+
+
+def line(df: pd.DataFrame, x: str, y: str) -> alt.Chart:
+    """꺾은선 차트(시간 추이)."""
+    return (alt.Chart(df).mark_line(point=True, color=GREEN, strokeWidth=2)
+            .encode(x=alt.X(x, title=None), y=alt.Y(f"{y}:Q", title=None), tooltip=list(df.columns))
+            .properties(height=260))
+
+
 def participant_table(parts, sessions, msgs) -> pd.DataFrame:
     """참여자별 요약: 세션 수·질문 수·넛지응답 수·마지막 활동."""
     rows = []
@@ -81,6 +119,107 @@ def participant_table(parts, sessions, msgs) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def section_participation(parts, sessions, msgs) -> None:
+    st.header("👥 참여 현황")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("참여자 수", len(parts))
+    c2.metric("총 세션 수", len(sessions))
+    c3.metric("총 질문 수", int(((col(msgs, "role") == "user") &
+                                (col(msgs, "message_type") == "rag_question")).sum()))
+    pt = participant_table(parts, sessions, msgs)
+    left, right = st.columns(2)
+    if not pt.empty and pt["질문수"].sum():
+        left.caption("참여자별 질문 수")
+        left.altair_chart(bar(pt[["참여자", "질문수"]], "참여자", "질문수"), use_container_width=True)
+    q = msgs[col(msgs, "message_type") == "rag_question"].copy()
+    if not q.empty:
+        q["날짜"] = kst_day(q["created_at"])
+        daily = q.dropna(subset=["날짜"]).groupby("날짜").size().reset_index(name="질문수")
+        right.caption("일자별 질문 추이")
+        right.altair_chart(line(daily, "날짜:T", "질문수"), use_container_width=True)
+    with st.expander("참여자별 상세 표"):
+        st.dataframe(pt, use_container_width=True, hide_index=True)
+
+
+def section_nudge(nudges) -> None:
+    st.header("🌱 넛지 성과")
+    displayed = len(nudges)
+    answered = int((col(nudges, "status") == "answered").sum())
+    committed = int(col(nudges, "action_commitment").notna().sum()) if not nudges.empty else 0
+    n1, n2, n3 = st.columns(3)
+    n1.metric("넛지 노출", displayed)
+    n2.metric("응답 전환율", rate(answered, displayed))
+    n3.metric("행동 약속(하겠다)", committed)
+    left, right = st.columns(2)
+    if displayed:
+        resp = pd.DataFrame({"구분": ["응답", "무응답"], "수": [answered, displayed - answered]})
+        left.caption("넛지 응답 전환")
+        left.altair_chart(donut(resp, "구분", "수"), use_container_width=True)
+    if not nudges.empty and "template_key" in nudges:
+        by_tpl = nudges.groupby("template_key").size().reset_index(name="노출수")
+        right.caption("넛지 종류별 노출")
+        right.altair_chart(bar(by_tpl, "template_key", "노출수"), use_container_width=True)
+
+
+def section_qa(events, retr) -> None:
+    st.header("💬 질문 · 근거")
+    q1, q2 = st.columns(2)
+    q1.metric("질문 발생(이벤트)", int((col(events, "event_type") == "question_asked").sum()))
+    q2.metric("출처 클릭", int((col(events, "event_type") == "source_clicked").sum()))
+    if not retr.empty and "evidence_level" in retr:
+        lvl = retr["evidence_level"].value_counts().reset_index()
+        lvl.columns = ["근거 충분성", "건수"]
+        left, _ = st.columns(2)
+        left.caption("근거 충분성 분포 (충분/부분/부족)")
+        left.altair_chart(donut(lvl, "근거 충분성", "건수"), use_container_width=True)
+
+
+def section_safety(events) -> None:
+    st.header("🛡️ 안전")
+    safety = int((col(events, "event_type") == "safety_message_shown").sum())
+    st.metric("안전 안내 노출(safety_message_shown)", safety)
+    if safety == 0:
+        st.caption("아직 안전 안내가 작동한 기록이 없습니다.")
+
+
+def section_cost(calls, errors) -> None:
+    st.header("💰 비용 · 운영")
+    if calls.empty:
+        st.caption("API 호출 기록이 아직 없습니다.")
+    else:
+        agg = calls.groupby("call_type").agg(
+            호출수=("call_type", "size"), 입력토큰=("input_tokens", "sum"),
+            출력토큰=("output_tokens", "sum"), 평균지연ms=("latency_ms", "mean"),
+        ).reset_index()
+        agg["평균지연ms"] = agg["평균지연ms"].round(0)
+        left, right = st.columns(2)
+        left.caption("호출 유형별 횟수")
+        left.altair_chart(bar(agg, "call_type", "호출수"), use_container_width=True)
+        right.caption("유형별 토큰·지연 상세")
+        right.dataframe(agg, use_container_width=True, hide_index=True)
+        st.caption(f"API 실패 호출: {int((col(calls, 'status') != 'success').sum())}건")
+    if not errors.empty:
+        et = errors["error_type"].value_counts().reset_index()
+        et.columns = ["오류 유형", "건수"]
+        st.altair_chart(bar(et, "오류 유형", "건수"), use_container_width=True)
+
+
+def section_csv() -> None:
+    st.header("📁 데이터 추출 (CSV)")
+    st.caption("분석용 원자료를 내려받습니다. 직접식별정보는 저장되지 않습니다. (내려받기 전 상단 새로고침으로 최신화)")
+    cols = st.columns(4)
+    for i, (label, table) in enumerate([
+        ("참여자", "participants"), ("세션", "sessions"), ("메시지", "messages"),
+        ("이벤트", "events"), ("넛지", "nudge_events"), ("검색로그", "retrieval_logs"),
+        ("API호출", "model_calls"), ("기술오류", "technical_errors"),
+    ]):
+        df = load(table)
+        cols[i % 4].download_button(
+            f"⬇ {label}", df.to_csv(index=False).encode("utf-8-sig"),
+            file_name=f"{table}.csv", mime="text/csv", use_container_width=True,
+            key=f"dl_{table}", disabled=df.empty)
+
+
 def main() -> None:
     st.title("📊 연구자 대시보드")
     st.caption("참여자 앱과 분리된 읽기 전용 화면 · 참여자는 익명 ID로만 표시")
@@ -97,78 +236,17 @@ def main() -> None:
     calls = load("model_calls", "call_type, input_tokens, output_tokens, latency_ms, status")
     errors = load("technical_errors", "error_type")
 
-    # ── 참여 현황 ────────────────────────────────────────────
-    st.header("참여 현황")
-    c1, c2, c3 = st.columns(3)
-    c1.metric("참여자 수", len(parts))
-    c2.metric("총 세션 수", len(sessions))
-    c3.metric("총 질문 수", int(((col(msgs, "role") == "user") &
-                                (col(msgs, "message_type") == "rag_question")).sum()))
-    st.dataframe(participant_table(parts, sessions, msgs), use_container_width=True, hide_index=True)
-
-    # ── 넛지 성과 ────────────────────────────────────────────
-    st.header("넛지 성과")
-    displayed = len(nudges)
-    answered = int((col(nudges, "status") == "answered").sum())
-    committed = int(col(nudges, "action_commitment").notna().sum()) if not nudges.empty else 0
-    n1, n2, n3 = st.columns(3)
-    n1.metric("넛지 노출", displayed)
-    n2.metric("응답 전환율", rate(answered, displayed))
-    n3.metric("행동 약속(하겠다)", committed)
-    if not nudges.empty and "template_key" in nudges:
-        by_tpl = nudges.groupby("template_key").size().reset_index(name="노출수")
-        st.dataframe(by_tpl, use_container_width=True, hide_index=True)
-
-    # ── 질문 · 근거 ─────────────────────────────────────────
-    st.header("질문 · 근거")
-    clicks = int((col(events, "event_type") == "source_clicked").sum())
-    questions = int((col(events, "event_type") == "question_asked").sum())
-    q1, q2 = st.columns(2)
-    q1.metric("질문 발생(이벤트)", questions)
-    q2.metric("출처 클릭", clicks)
-    if not retr.empty and "evidence_level" in retr:
-        lvl = retr["evidence_level"].value_counts().reset_index()
-        lvl.columns = ["근거 충분성", "건수"]
-        st.dataframe(lvl, use_container_width=True, hide_index=True)
-
-    # ── 안전 ────────────────────────────────────────────────
-    st.header("안전")
-    safety = int((col(events, "event_type") == "safety_message_shown").sum())
-    st.metric("안전 안내 노출(safety_message_shown)", safety)
-
-    # ── 비용 · 운영 ─────────────────────────────────────────
-    st.header("비용 · 운영")
-    if not calls.empty:
-        agg = calls.groupby("call_type").agg(
-            호출수=("call_type", "size"),
-            입력토큰=("input_tokens", "sum"),
-            출력토큰=("output_tokens", "sum"),
-            평균지연ms=("latency_ms", "mean"),
-        ).reset_index()
-        agg["평균지연ms"] = agg["평균지연ms"].round(0)
-        st.dataframe(agg, use_container_width=True, hide_index=True)
-        fails = int((col(calls, "status") != "success").sum())
-        st.caption(f"API 실패 호출: {fails}건")
-    else:
-        st.caption("API 호출 기록이 아직 없습니다.")
-    if not errors.empty:
-        st.dataframe(errors["error_type"].value_counts().reset_index(),
-                     use_container_width=True, hide_index=True)
-
-    # ── CSV 추출 ────────────────────────────────────────────
-    st.header("데이터 추출 (CSV)")
-    st.caption("분석용 원자료를 내려받습니다. 직접식별정보는 저장되지 않습니다.")
-    cols = st.columns(4)
-    for i, (label, table) in enumerate([
-        ("참여자", "participants"), ("세션", "sessions"), ("메시지", "messages"),
-        ("이벤트", "events"), ("넛지", "nudge_events"), ("검색로그", "retrieval_logs"),
-        ("API호출", "model_calls"), ("기술오류", "technical_errors"),
-    ]):
-        df = load(table)
-        cols[i % 4].download_button(
-            f"⬇ {label}", df.to_csv(index=False).encode("utf-8-sig"),
-            file_name=f"{table}.csv", mime="text/csv", use_container_width=True,
-            key=f"dl_{table}", disabled=df.empty)
+    section_participation(parts, sessions, msgs)
+    st.divider()
+    section_nudge(nudges)
+    st.divider()
+    section_qa(events, retr)
+    st.divider()
+    section_safety(events)
+    st.divider()
+    section_cost(calls, errors)
+    st.divider()
+    section_csv()
 
 
 if check_password():
