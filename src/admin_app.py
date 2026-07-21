@@ -301,34 +301,52 @@ def section_qa(events, retr, rchunks, dchunks, docs, calls) -> None:
     if retr.empty:
         st.caption("아직 RAG 검색 기록이 없습니다.")
         return
-    total = len(retr)
-    ev = retr["evidence_level"].value_counts()
+    terms = health_terms()
     rt = rag_table(retr, rchunks)
-    avg_top = rt["top유사도"].mean() if "top유사도" in rt.columns else float("nan")
+    rt["건강"] = rt["질문"].fillna("").apply(lambda t: any(k in t for k in terms))
+    total = len(rt)
+    hrt = rt[rt["건강"]]                                   # 건강 질문만
+    nh = len(hrt)
+    hev = hrt["근거수준"].value_counts()                  # 건강 질문의 근거 결과
+    suff, part, insf = (int(hev.get(k, 0)) for k in ("sufficient", "partial", "insufficient"))
+    avg_top = hrt["top유사도"].mean() if "top유사도" in hrt.columns else float("nan")
     emb = col(calls, "call_type") == "query_embedding"
     ans = col(calls, "call_type") == "rag_answer"
     emb_lat = calls.loc[emb, "latency_ms"].mean() if emb.any() else float("nan")
     ans_lat = calls.loc[ans, "latency_ms"].mean() if ans.any() else float("nan")
     clicks = int((col(events, "event_type") == "source_clicked").sum())
 
+    def share(n: int) -> str:
+        return f"{n} ({round(n / total * 100)}%)" if total else "0"
+
+    st.markdown("**질문 구성** — 전체 검색 중 건강/일상 질문 비중")
     m = st.columns(3)
     m[0].metric("총 검색 수", total)
-    m[1].metric("근거 충분", rate(int(ev.get("sufficient", 0)), total))
-    m[2].metric("근거 부족 ⚠️", rate(int(ev.get("insufficient", 0)), total))
-    m2 = st.columns(3)
-    m2[0].metric("평균 top-1 유사도", f"{avg_top:.3f}" if avg_top == avg_top else "-")
-    m2[1].metric("평균 검색 지연", f"{emb_lat:.0f} ms" if emb_lat == emb_lat else "-")
-    m2[2].metric("평균 답변 생성", f"{ans_lat / 1000:.1f} 초" if ans_lat == ans_lat else "-")
-    st.caption(f"‘근거 부족’ 비율이 높거나 top유사도가 낮으면 문서 보강·검색 개선이 필요하다는 신호입니다. (출처 클릭 {clicks}회)")
+    m[1].metric("건강 질문", share(nh))
+    m[2].metric("일상 질문(off-topic)", share(total - nh))
 
-    lvl = ev.reset_index()
-    lvl.columns = ["근거 충분성", "건수"]
+    st.markdown(f"**건강 질문의 근거 성과** — 건강 질문 {nh}건 기준 (일상 질문 제외)")
+    g = st.columns(3)
+    g[0].metric("근거 충분", rate(suff, nh))
+    g[1].metric("근거 부분", rate(part, nh))
+    g[2].metric("근거 부족 ⚠️", rate(insf, nh))
+
+    st.markdown("**검색 성능**")
+    p = st.columns(3)
+    p[0].metric("평균 top유사도(건강)", f"{avg_top:.3f}" if avg_top == avg_top else "-")
+    p[1].metric("평균 검색 지연", f"{emb_lat:.0f} ms" if emb_lat == emb_lat else "-")
+    p[2].metric("평균 답변 생성", f"{ans_lat / 1000:.1f} 초" if ans_lat == ans_lat else "-")
+    st.caption(f"건강 질문의 ‘근거 부족’이 높거나 top유사도가 낮으면 문서 보강 신호입니다. (출처 클릭 {clicks}회)")
+
     left, right = st.columns(2)
-    left.caption("근거 충분성 분포 (충분/부분/부족)")
-    left.altair_chart(donut(lvl, "근거 충분성", "건수"), use_container_width=True)
-    if "top유사도" in rt.columns and rt["top유사도"].notna().any():
-        right.caption("top-1 유사도 분포 (오른쪽일수록 근거가 강함)")
-        right.altair_chart(hist(rt.dropna(subset=["top유사도"]), "top유사도"), use_container_width=True)
+    if not hev.empty:
+        lvl = hev.reset_index()
+        lvl.columns = ["근거 충분성", "건수"]
+        left.caption("건강 질문 근거 충분성 분포")
+        left.altair_chart(donut(lvl, "근거 충분성", "건수"), use_container_width=True)
+    if "top유사도" in hrt.columns and hrt["top유사도"].notna().any():
+        right.caption("top-1 유사도 분포 (건강 질문, 오른쪽일수록 강함)")
+        right.altair_chart(hist(hrt.dropna(subset=["top유사도"]), "top유사도"), use_container_width=True)
 
     usage = doc_usage(rchunks, dchunks, docs)
     if not usage.empty:
@@ -359,13 +377,8 @@ def section_qa(events, retr, rchunks, dchunks, docs, calls) -> None:
     if "top유사도" in rt.columns:
         cond = cond | (rt["top유사도"] < 0.30)
     weak = rt[cond]
-    # 건강과 무관한 일반대화(off-topic)는 제외 — 근거가 없는 게 정상이지 KB 구멍이 아니다.
-    off = 0
-    if "질문" in weak.columns:
-        terms = health_terms()
-        is_h = weak["질문"].fillna("").apply(lambda t: any(k in t for k in terms))
-        off = int((~is_h).sum())
-        weak = weak[is_h]
+    off = int((~weak["건강"]).sum())      # 건강과 무관한 일반대화는 제외(근거 없음이 정상 — KB 구멍 아님)
+    weak = weak[weak["건강"]]
     weak_cols = [c for c in ["질문", "근거수준", "top유사도", "시각"] if c in weak.columns]
     if weak.empty:
         st.caption(f"건강 질문 중 근거 부족·약한 질문이 없습니다. 👍 (건강과 무관한 일반대화 {off}건 제외)")
