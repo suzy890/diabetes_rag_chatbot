@@ -140,6 +140,20 @@ def section_participation(parts, sessions, msgs) -> None:
     st.dataframe(pt, use_container_width=True, hide_index=True)
 
 
+def nudge_by_participant(nudges) -> pd.DataFrame:
+    """참여자별 넛지 노출·응답·응답률·행동약속."""
+    if nudges.empty or "participant_id" not in nudges.columns:
+        return pd.DataFrame()
+    rows = []
+    for pid, g in nudges.groupby("participant_id"):
+        disp = len(g)
+        ans = int((g["status"] == "answered").sum())
+        rows.append({"참여자": pid, "노출": disp, "응답": ans,
+                     "응답률(%)": round(ans / disp * 100) if disp else 0,
+                     "행동약속": int(g["action_commitment"].notna().sum())})
+    return pd.DataFrame(rows).sort_values("응답률(%)", ascending=False)
+
+
 def section_nudge(nudges) -> None:
     displayed = len(nudges)
     answered = int((col(nudges, "status") == "answered").sum())
@@ -159,6 +173,14 @@ def section_nudge(nudges) -> None:
         right.altair_chart(bar(by_tpl, "template_key", "노출수"), use_container_width=True)
         st.caption("넛지 종류별 노출 (수치)")
         st.dataframe(by_tpl, use_container_width=True, hide_index=True)
+    per = nudge_by_participant(nudges)
+    if not per.empty:
+        st.markdown("**참여자별 넛지 반응**")
+        pleft, pright = st.columns(2)
+        pleft.caption("참여자별 응답률(%)")
+        pleft.altair_chart(bar(per[["참여자", "응답률(%)"]], "참여자", "응답률(%)"), use_container_width=True)
+        pright.caption("참여자별 상세 (노출·응답·응답률·행동약속)")
+        pright.dataframe(per, use_container_width=True, hide_index=True)
 
 
 def section_qa(events, retr) -> None:
@@ -229,7 +251,7 @@ def main() -> None:
     sessions = load("sessions", "session_id, participant_id, started_at")
     msgs = load("messages", "participant_id, role, message_type, created_at")
     events = load("events", "event_type, participant_id")
-    nudges = load("nudge_events", "status, response, action_commitment, template_key")
+    nudges = load("nudge_events", "participant_id, status, response, action_commitment, template_key")
     retr = load("retrieval_logs", "evidence_level")
     calls = load("model_calls", "call_type, input_tokens, output_tokens, latency_ms, status")
     errors = load("technical_errors", "error_type")
