@@ -39,6 +39,19 @@ html, body, [class*="css"] {
     width: 320px !important; min-width: 320px !important; margin-left: 0 !important;
   }
 }
+/* 모바일(≤640px): 사이드바는 접힌 채 시작(채팅이 먼저 보이게). 네이티브 '다시 열기' 버튼이
+   잘 안 보이는 문제가 있어, 좌상단에 눈에 띄는 초록 고정 버튼으로 강제 표시해 기록에 접근하게 한다. */
+@media (max-width: 640px) {
+  [data-testid="stExpandSidebarButton"] {
+    display: flex !important; visibility: visible !important;
+    position: fixed !important; top: 10px; left: 10px; z-index: 100000 !important;
+  }
+  [data-testid="stExpandSidebarButton"] button {
+    background: var(--green) !important; color: white !important; border: 0 !important;
+    border-radius: 12px !important; min-height: 42px; min-width: 42px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22) !important;
+  }
+}
 [data-testid="stAppViewContainer"] { background: #f4f8f5; }
 /* 메인 영역은 세로 스크롤 컨테이너로 유지(대화가 길어지면 내려서 봐야 함).
    가로는 숨겨 full-bleed 요소(header-rule 등)로 가로 스크롤이 생기지 않게 한다. */
