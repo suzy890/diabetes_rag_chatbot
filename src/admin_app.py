@@ -183,18 +183,99 @@ def section_nudge(nudges) -> None:
         pright.dataframe(per, use_container_width=True, hide_index=True)
 
 
-def section_qa(events, retr) -> None:
-    q1, q2 = st.columns(2)
-    q1.metric("질문 발생(이벤트)", int((col(events, "event_type") == "question_asked").sum()))
-    q2.metric("출처 클릭", int((col(events, "event_type") == "source_clicked").sum()))
-    if not retr.empty and "evidence_level" in retr:
-        lvl = retr["evidence_level"].value_counts().reset_index()
-        lvl.columns = ["근거 충분성", "건수"]
-        left, right = st.columns(2)
-        left.caption("근거 충분성 분포 (충분/부분/부족)")
-        left.altair_chart(donut(lvl, "근거 충분성", "건수"), use_container_width=True)
-        right.caption("근거 충분성 (수치)")
-        right.dataframe(lvl, use_container_width=True, hide_index=True)
+def hist(df: pd.DataFrame, val: str, maxbins: int = 12) -> alt.Chart:
+    """히스토그램(연속값 분포)."""
+    return (alt.Chart(df).mark_bar(color=GREEN)
+            .encode(x=alt.X(f"{val}:Q", bin=alt.Bin(maxbins=maxbins), title=None),
+                    y=alt.Y("count()", title="건수"), tooltip=["count()"]).properties(height=260))
+
+
+def rag_table(retr, rchunks) -> pd.DataFrame:
+    """검색별 상세: 질문·근거수준·top유사도·검색/선택 청크 수·시각."""
+    r = retr.rename(columns={"query_text": "질문", "evidence_level": "근거수준",
+                             "knowledge_base_version": "KB버전"}).copy()
+    if not rchunks.empty:
+        top = rchunks.groupby("retrieval_id")["similarity_score"].max()
+        ret = rchunks.groupby("retrieval_id").size()
+        sel = rchunks[rchunks["was_selected"] == True].groupby("retrieval_id").size()
+        r["top유사도"] = r["retrieval_id"].map(top).round(3)
+        r["검색청크"] = r["retrieval_id"].map(ret).fillna(0).astype(int)
+        r["선택청크"] = r["retrieval_id"].map(sel).fillna(0).astype(int)
+    r["시각"] = r["retrieved_at"].astype(str).str[:16]
+    return r
+
+
+def doc_usage(rchunks, dchunks, docs) -> pd.DataFrame:
+    """문서별 '근거로 선택된 청크 수'. 안 쓰인 문서는 0으로 함께 보여준다(커버리지 점검)."""
+    if docs.empty:
+        return pd.DataFrame()
+    used = pd.Series(dtype="int64")
+    if not rchunks.empty and not dchunks.empty:
+        sel = rchunks[rchunks["was_selected"] == True].copy()
+        sel["document_id"] = sel["chunk_id"].map(dict(zip(dchunks["chunk_id"], dchunks["document_id"])))
+        used = sel.groupby("document_id").size()
+    out = docs.copy()
+    out["근거 선택 횟수"] = out["document_id"].map(used).fillna(0).astype(int)
+    return (out[["title", "근거 선택 횟수"]].rename(columns={"title": "문서"})
+            .sort_values("근거 선택 횟수", ascending=False))
+
+
+def section_qa(events, retr, rchunks, dchunks, docs, calls) -> None:
+    if retr.empty:
+        st.caption("아직 RAG 검색 기록이 없습니다.")
+        return
+    total = len(retr)
+    ev = retr["evidence_level"].value_counts()
+    rt = rag_table(retr, rchunks)
+    avg_top = rt["top유사도"].mean() if "top유사도" in rt.columns else float("nan")
+    emb = col(calls, "call_type") == "query_embedding"
+    ans = col(calls, "call_type") == "rag_answer"
+    emb_lat = calls.loc[emb, "latency_ms"].mean() if emb.any() else float("nan")
+    ans_lat = calls.loc[ans, "latency_ms"].mean() if ans.any() else float("nan")
+    clicks = int((col(events, "event_type") == "source_clicked").sum())
+
+    m = st.columns(3)
+    m[0].metric("총 검색 수", total)
+    m[1].metric("근거 충분", rate(int(ev.get("sufficient", 0)), total))
+    m[2].metric("근거 부족 ⚠️", rate(int(ev.get("insufficient", 0)), total))
+    m2 = st.columns(3)
+    m2[0].metric("평균 top-1 유사도", f"{avg_top:.3f}" if avg_top == avg_top else "-")
+    m2[1].metric("평균 검색 지연", f"{emb_lat:.0f} ms" if emb_lat == emb_lat else "-")
+    m2[2].metric("평균 답변 생성", f"{ans_lat / 1000:.1f} 초" if ans_lat == ans_lat else "-")
+    st.caption(f"‘근거 부족’ 비율이 높거나 top유사도가 낮으면 문서 보강·검색 개선이 필요하다는 신호입니다. (출처 클릭 {clicks}회)")
+
+    lvl = ev.reset_index()
+    lvl.columns = ["근거 충분성", "건수"]
+    left, right = st.columns(2)
+    left.caption("근거 충분성 분포 (충분/부분/부족)")
+    left.altair_chart(donut(lvl, "근거 충분성", "건수"), use_container_width=True)
+    if "top유사도" in rt.columns and rt["top유사도"].notna().any():
+        right.caption("top-1 유사도 분포 (오른쪽일수록 근거가 강함)")
+        right.altair_chart(hist(rt.dropna(subset=["top유사도"]), "top유사도"), use_container_width=True)
+
+    usage = doc_usage(rchunks, dchunks, docs)
+    if not usage.empty:
+        st.markdown("**문서별 근거 활용** — 어떤 승인 문서가 실제 근거로 쓰였나 (0이면 한 번도 안 쓰임 → 커버리지 점검)")
+        u1, u2 = st.columns(2)
+        u1.altair_chart(bar(usage, "문서", "근거 선택 횟수"), use_container_width=True)
+        u2.dataframe(usage, use_container_width=True, hide_index=True)
+
+    st.markdown("**⚠️ 근거를 못 찾은 / 약한 질문** — 이 주제의 문서를 보강하면 정확도가 오릅니다")
+    cond = rt["근거수준"] == "insufficient"
+    if "top유사도" in rt.columns:
+        cond = cond | (rt["top유사도"] < 0.30)
+    weak = rt[cond]
+    weak_cols = [c for c in ["질문", "근거수준", "top유사도", "시각"] if c in weak.columns]
+    if weak.empty:
+        st.caption("근거 부족·약한 질문이 없습니다. 👍")
+    else:
+        st.dataframe(weak[weak_cols].sort_values("top유사도"), use_container_width=True, hide_index=True)
+
+    with st.expander("질문별 RAG 상세 전체 보기"):
+        full = [c for c in ["질문", "근거수준", "top유사도", "검색청크", "선택청크", "KB버전", "시각"]
+                if c in rt.columns]
+        st.dataframe(rt[full].sort_values("시각", ascending=False),
+                     use_container_width=True, hide_index=True)
 
 
 def section_safety(events) -> None:
@@ -252,7 +333,11 @@ def main() -> None:
     msgs = load("messages", "participant_id, role, message_type, created_at")
     events = load("events", "event_type, participant_id")
     nudges = load("nudge_events", "participant_id, status, response, action_commitment, template_key")
-    retr = load("retrieval_logs", "evidence_level")
+    retr = load("retrieval_logs",
+                "retrieval_id, question_message_id, query_text, evidence_level, knowledge_base_version, retrieved_at")
+    rchunks = load("retrieval_chunks", "retrieval_id, chunk_id, similarity_score, was_selected")
+    dchunks = load("document_chunks", "chunk_id, document_id")
+    docs = load("documents", "document_id, title")
     calls = load("model_calls", "call_type, input_tokens, output_tokens, latency_ms, status")
     errors = load("technical_errors", "error_type")
 
@@ -263,7 +348,7 @@ def main() -> None:
     with tabs[1]:
         section_nudge(nudges)
     with tabs[2]:
-        section_qa(events, retr)
+        section_qa(events, retr, rchunks, dchunks, docs, calls)
     with tabs[3]:
         section_safety(events)
     with tabs[4]:
