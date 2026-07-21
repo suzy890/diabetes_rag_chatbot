@@ -10,7 +10,9 @@
 """
 
 import os
+import re
 import sys
+from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -220,6 +222,70 @@ def doc_usage(rchunks, dchunks, docs) -> pd.DataFrame:
             .sort_values("근거 선택 횟수", ascending=False))
 
 
+# 질문을 큰 주제로 묶는 사전(부분 문자열 매칭). 연구팀이 자유롭게 수정 가능.
+TOPICS = {
+    "혈당/수치": ["혈당", "수치", "당화", "에이원", "a1c"],
+    "저혈당": ["저혈당"],
+    "식사/음식": ["식사", "음식", "먹", "밥", "탄수", "당지수", "간식"],
+    "운동": ["운동", "걷", "산책", "활동"],
+    "복약/약": ["약", "복용", "인슐린", "주사"],
+    "합병증/발관리": ["합병증", "발", "상처", "신장", "저림", "눈", "혈관"],
+    "혈압": ["혈압"],
+    "체중": ["체중", "비만"],
+}
+
+
+def topic_analysis(retr) -> pd.DataFrame:
+    """질문을 주제별로 분류해 '질문 수 + 근거 부족 비율'을 낸다(문서 보강 판단용)."""
+    if retr.empty:
+        return pd.DataFrame()
+    q = retr["query_text"].fillna("")
+    rows = []
+    for topic, kws in TOPICS.items():
+        mask = q.apply(lambda t: any(k in t for k in kws))
+        n = int(mask.sum())
+        if not n:
+            continue
+        insf = int((retr.loc[mask, "evidence_level"] == "insufficient").sum())
+        rows.append({"주제": topic, "질문수": n, "근거부족": insf, "부족률(%)": round(insf / n * 100)})
+    return pd.DataFrame(rows).sort_values("질문수", ascending=False)
+
+
+def keyword_freq(retr, topn: int = 12) -> pd.DataFrame:
+    """질문에서 자주 나온 단어(대략). 흔한 조사·의문사는 정리한다(형태소 분석은 아님)."""
+    if retr.empty:
+        return pd.DataFrame()
+    josa = ("으로", "에서", "까지", "부터", "은", "는", "이", "가", "을", "를", "에", "도", "의", "로", "와", "과", "만")
+    stop = {"어떻게", "무엇", "해도", "해야", "되나요", "인가요", "있나요", "하나요", "알려줘",
+            "궁금", "무슨", "이건", "저는", "너는", "그리고", "지금", "그때"}
+    c: Counter = Counter()
+    for t in retr["query_text"].fillna(""):
+        for w in re.findall(r"[가-힣]{2,}", t):
+            for j in josa:
+                if len(w) - len(j) >= 2 and w.endswith(j):
+                    w = w[: -len(j)]
+                    break
+            if len(w) >= 2 and w not in stop:
+                c[w] += 1
+    return pd.DataFrame(c.most_common(topn), columns=["키워드", "횟수"])
+
+
+def chunk_usage(rchunks, dchunks, docs, topn: int = 10) -> pd.DataFrame:
+    """가장 많이 '근거로 선택된' 청크 top N — 내용 미리보기·문서·페이지와 함께."""
+    if rchunks.empty or dchunks.empty:
+        return pd.DataFrame()
+    sel = rchunks[rchunks["was_selected"] == True]
+    if sel.empty:
+        return pd.DataFrame()
+    m = sel.groupby("chunk_id").size().rename("선택횟수").reset_index().merge(dchunks, on="chunk_id", how="left")
+    if not docs.empty:
+        m = m.merge(docs, on="document_id", how="left")
+    m["내용"] = m["content"].astype(str).str.slice(0, 60) + "…"
+    out = m.sort_values("선택횟수", ascending=False).head(topn)
+    cols = [c for c in ["선택횟수", "title", "page_number", "내용"] if c in out.columns]
+    return out[cols].rename(columns={"title": "문서", "page_number": "쪽"})
+
+
 def section_qa(events, retr, rchunks, dchunks, docs, calls) -> None:
     if retr.empty:
         st.caption("아직 RAG 검색 기록이 없습니다.")
@@ -259,6 +325,23 @@ def section_qa(events, retr, rchunks, dchunks, docs, calls) -> None:
         u1, u2 = st.columns(2)
         u1.altair_chart(bar(usage, "문서", "근거 선택 횟수"), use_container_width=True)
         u2.dataframe(usage, use_container_width=True, hide_index=True)
+
+    ta = topic_analysis(retr)
+    if not ta.empty:
+        st.markdown("**질문 주제·키워드 분석** — 많이 묻는 주제인데 **근거 부족률이 높으면** 그 주제 문서를 보강하면 품질이 오릅니다")
+        t1, t2 = st.columns(2)
+        t1.caption("주제별 질문 수")
+        t1.altair_chart(bar(ta[["주제", "질문수"]], "주제", "질문수"), use_container_width=True)
+        t2.caption("주제별 질문 수 · 근거 부족률")
+        t2.dataframe(ta, use_container_width=True, hide_index=True)
+        kw = keyword_freq(retr)
+        if not kw.empty:
+            st.caption("자주 나온 키워드 (대략 — 형태소 분석 아님)")
+            st.altair_chart(bar(kw, "키워드", "횟수"), use_container_width=True)
+    cu = chunk_usage(rchunks, dchunks, docs)
+    if not cu.empty:
+        st.markdown("**많이 쓰인 근거 청크** — 어떤 문서 조각이 자주 근거로 선택되나 (활용 높은 지식 조각)")
+        st.dataframe(cu, use_container_width=True, hide_index=True)
 
     st.markdown("**⚠️ 근거를 못 찾은 / 약한 질문** — 이 주제의 문서를 보강하면 정확도가 오릅니다")
     cond = rt["근거수준"] == "insufficient"
@@ -336,7 +419,7 @@ def main() -> None:
     retr = load("retrieval_logs",
                 "retrieval_id, question_message_id, query_text, evidence_level, knowledge_base_version, retrieved_at")
     rchunks = load("retrieval_chunks", "retrieval_id, chunk_id, similarity_score, was_selected")
-    dchunks = load("document_chunks", "chunk_id, document_id")
+    dchunks = load("document_chunks", "chunk_id, document_id, content, page_number")
     docs = load("documents", "document_id, title")
     calls = load("model_calls", "call_type, input_tokens, output_tokens, latency_ms, status")
     errors = load("technical_errors", "error_type")
