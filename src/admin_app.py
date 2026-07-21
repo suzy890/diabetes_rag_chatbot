@@ -297,6 +297,28 @@ def health_terms() -> list:
         return ["혈당", "당뇨", "인슐린", "저혈당", "합병증", "식사", "운동", "발", "수치", "혈압", "먹", "음식", "약"]
 
 
+def rag_recommendations(rt) -> pd.DataFrame:
+    """건강 질문을 주제별로 묶어 '문서 보강 우선순위'를 만든다.
+
+    부족(insufficient)=문서 자체가 없음, 보완필요(partial)=답은 하나 근거가 약함.
+    점수 = 부족×3 + 보완필요×1 → 질문이 많은데 근거가 약한 주제가 위로 온다.
+    """
+    hrt = rt[rt["건강"]] if "건강" in rt.columns else rt
+    if hrt.empty:
+        return pd.DataFrame()
+    rows = []
+    for topic, kws in TOPICS.items():
+        g = hrt[hrt["질문"].fillna("").apply(lambda t: any(k in t for k in kws))]
+        if g.empty:
+            continue
+        lv = g["근거수준"].value_counts()
+        insf, part, suff = (int(lv.get(k, 0)) for k in ("insufficient", "partial", "sufficient"))
+        avg = round(g["top유사도"].mean(), 3) if "top유사도" in g.columns and g["top유사도"].notna().any() else None
+        rows.append({"주제": topic, "질문수": len(g), "부족": insf, "보완필요": part, "충분": suff,
+                     "평균유사도": avg, "_score": insf * 3 + part})
+    return pd.DataFrame(rows).sort_values(["_score", "질문수"], ascending=False)
+
+
 def section_qa(events, retr, rchunks, dchunks, docs, calls) -> None:
     if retr.empty:
         st.caption("아직 RAG 검색 기록이 없습니다.")
@@ -391,6 +413,33 @@ def section_qa(events, retr, rchunks, dchunks, docs, calls) -> None:
                 if c in rt.columns]
         st.dataframe(rt[full].sort_values("시각", ascending=False),
                      use_container_width=True, hide_index=True)
+
+    st.divider()
+    st.markdown("### 📌 RAG DB 보강 추천 (문서 추가 가이드)")
+    st.caption("사용이 쌓일수록 정교해집니다. 아래는 '건강 질문이 많은데 근거가 약한 주제' 순으로 정리한 문서 추가 가이드입니다.")
+    rec = rag_recommendations(rt)
+    need = rec[rec["_score"] > 0] if not rec.empty else rec
+    if rec.empty:
+        st.info("아직 데이터가 부족합니다. 사용이 쌓이면 여기에 보강 우선순위가 나타납니다.")
+    elif need.empty:
+        st.success("현재 건강 질문 주제들이 충분히 커버되고 있습니다. 👍 새 문서 추가가 시급하지 않습니다.")
+    else:
+        for _, r in need.iterrows():
+            tag = "🔴 우선순위 높음" if r["부족"] > 0 else "🟠 보완 권장"
+            why = []
+            if r["부족"]:
+                why.append(f"근거 부족 {int(r['부족'])}건(관련 문서 없음)")
+            if r["보완필요"]:
+                why.append(f"근거 부분 {int(r['보완필요'])}건(더 상세한 문서 필요)")
+            sim = f" · 평균 유사도 {r['평균유사도']}" if r["평균유사도"] is not None else ""
+            st.markdown(f"**[{r['주제']}]** {tag} · 질문 {int(r['질문수'])}건 · " + ", ".join(why) + sim)
+            st.caption(f"→ ‘{r['주제']}’ 관련 **상세 문서를 지식베이스에 추가**하면 이 주제의 답변 품질이 오릅니다.")
+        gaps = rt[(rt["건강"]) & (rt["근거수준"] == "insufficient")]["질문"].dropna().tolist()
+        if gaps:
+            st.markdown("**답을 제대로 못한 건강 질문 (구체 예시 — 이 내용의 문서가 있으면 답할 수 있음):**")
+            for qtext in gaps[:6]:
+                st.markdown(f"- “{qtext}”")
+        st.dataframe(need.drop(columns=["_score"]), use_container_width=True, hide_index=True)
 
 
 def section_safety(events) -> None:
