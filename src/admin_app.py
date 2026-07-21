@@ -120,7 +120,6 @@ def participant_table(parts, sessions, msgs) -> pd.DataFrame:
 
 
 def section_participation(parts, sessions, msgs) -> None:
-    st.header("👥 참여 현황")
     c1, c2, c3 = st.columns(3)
     c1.metric("참여자 수", len(parts))
     c2.metric("총 세션 수", len(sessions))
@@ -142,7 +141,6 @@ def section_participation(parts, sessions, msgs) -> None:
 
 
 def section_nudge(nudges) -> None:
-    st.header("🌱 넛지 성과")
     displayed = len(nudges)
     answered = int((col(nudges, "status") == "answered").sum())
     committed = int(col(nudges, "action_commitment").notna().sum()) if not nudges.empty else 0
@@ -164,7 +162,6 @@ def section_nudge(nudges) -> None:
 
 
 def section_qa(events, retr) -> None:
-    st.header("💬 질문 · 근거")
     q1, q2 = st.columns(2)
     q1.metric("질문 발생(이벤트)", int((col(events, "event_type") == "question_asked").sum()))
     q2.metric("출처 클릭", int((col(events, "event_type") == "source_clicked").sum()))
@@ -179,7 +176,6 @@ def section_qa(events, retr) -> None:
 
 
 def section_safety(events) -> None:
-    st.header("🛡️ 안전")
     safety = int((col(events, "event_type") == "safety_message_shown").sum())
     st.metric("안전 안내 노출(safety_message_shown)", safety)
     if safety == 0:
@@ -187,7 +183,6 @@ def section_safety(events) -> None:
 
 
 def section_cost(calls, errors) -> None:
-    st.header("💰 비용 · 운영")
     if calls.empty:
         st.caption("API 호출 기록이 아직 없습니다.")
     else:
@@ -209,7 +204,6 @@ def section_cost(calls, errors) -> None:
 
 
 def section_csv() -> None:
-    st.header("📁 데이터 추출 (CSV)")
     st.caption("분석용 원자료를 내려받습니다. 직접식별정보는 저장되지 않습니다. (내려받기 전 상단 새로고침으로 최신화)")
     cols = st.columns(4)
     for i, (label, table) in enumerate([
@@ -240,17 +234,20 @@ def main() -> None:
     calls = load("model_calls", "call_type, input_tokens, output_tokens, latency_ms, status")
     errors = load("technical_errors", "error_type")
 
-    section_participation(parts, sessions, msgs)
-    st.divider()
-    section_nudge(nudges)
-    st.divider()
-    section_qa(events, retr)
-    st.divider()
-    section_safety(events)
-    st.divider()
-    section_cost(calls, errors)
-    st.divider()
-    section_csv()
+    tabs = st.tabs(["👥 참여 현황", "🌱 넛지 성과", "💬 질문·근거",
+                    "🛡️ 안전", "💰 비용·운영", "📁 데이터 추출"])
+    with tabs[0]:
+        section_participation(parts, sessions, msgs)
+    with tabs[1]:
+        section_nudge(nudges)
+    with tabs[2]:
+        section_qa(events, retr)
+    with tabs[3]:
+        section_safety(events)
+    with tabs[4]:
+        section_cost(calls, errors)
+    with tabs[5]:
+        section_csv()
 
 
 if check_password():
