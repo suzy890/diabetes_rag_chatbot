@@ -137,8 +137,8 @@ def section_participation(parts, sessions, msgs) -> None:
         daily = q.dropna(subset=["날짜"]).groupby("날짜").size().reset_index(name="질문수")
         right.caption("일자별 질문 추이")
         right.altair_chart(line(daily, "날짜:T", "질문수"), use_container_width=True)
-    with st.expander("참여자별 상세 표"):
-        st.dataframe(pt, use_container_width=True, hide_index=True)
+    st.caption("참여자별 상세 (수치)")
+    st.dataframe(pt, use_container_width=True, hide_index=True)
 
 
 def section_nudge(nudges) -> None:
@@ -159,6 +159,8 @@ def section_nudge(nudges) -> None:
         by_tpl = nudges.groupby("template_key").size().reset_index(name="노출수")
         right.caption("넛지 종류별 노출")
         right.altair_chart(bar(by_tpl, "template_key", "노출수"), use_container_width=True)
+        st.caption("넛지 종류별 노출 (수치)")
+        st.dataframe(by_tpl, use_container_width=True, hide_index=True)
 
 
 def section_qa(events, retr) -> None:
@@ -169,9 +171,11 @@ def section_qa(events, retr) -> None:
     if not retr.empty and "evidence_level" in retr:
         lvl = retr["evidence_level"].value_counts().reset_index()
         lvl.columns = ["근거 충분성", "건수"]
-        left, _ = st.columns(2)
+        left, right = st.columns(2)
         left.caption("근거 충분성 분포 (충분/부분/부족)")
         left.altair_chart(donut(lvl, "근거 충분성", "건수"), use_container_width=True)
+        right.caption("근거 충분성 (수치)")
+        right.dataframe(lvl, use_container_width=True, hide_index=True)
 
 
 def section_safety(events) -> None:
