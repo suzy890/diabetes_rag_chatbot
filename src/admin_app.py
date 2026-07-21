@@ -286,6 +286,17 @@ def chunk_usage(rchunks, dchunks, docs, topn: int = 10) -> pd.DataFrame:
     return out[cols].rename(columns={"title": "문서", "page_number": "쪽"})
 
 
+@st.cache_data(show_spinner=False)
+def health_terms() -> list:
+    """건강 관련 질문 판별용 키워드. 참여자 앱과 같은 출처(prompts/social_replies.json)를 쓴다."""
+    import json
+    p = Path(__file__).resolve().parent.parent / "prompts" / "social_replies.json"
+    try:
+        return json.loads(p.read_text(encoding="utf-8")).get("health_guard", [])
+    except Exception:
+        return ["혈당", "당뇨", "인슐린", "저혈당", "합병증", "식사", "운동", "발", "수치", "혈압", "먹", "음식", "약"]
+
+
 def section_qa(events, retr, rchunks, dchunks, docs, calls) -> None:
     if retr.empty:
         st.caption("아직 RAG 검색 기록이 없습니다.")
@@ -343,16 +354,24 @@ def section_qa(events, retr, rchunks, dchunks, docs, calls) -> None:
         st.markdown("**많이 쓰인 근거 청크** — 어떤 문서 조각이 자주 근거로 선택되나 (활용 높은 지식 조각)")
         st.dataframe(cu, use_container_width=True, hide_index=True)
 
-    st.markdown("**⚠️ 근거를 못 찾은 / 약한 질문** — 이 주제의 문서를 보강하면 정확도가 오릅니다")
+    st.markdown("**⚠️ 건강 질문 중 근거를 못 찾은 / 약한 질문** — 이 주제의 문서를 보강하면 정확도가 오릅니다")
     cond = rt["근거수준"] == "insufficient"
     if "top유사도" in rt.columns:
         cond = cond | (rt["top유사도"] < 0.30)
     weak = rt[cond]
+    # 건강과 무관한 일반대화(off-topic)는 제외 — 근거가 없는 게 정상이지 KB 구멍이 아니다.
+    off = 0
+    if "질문" in weak.columns:
+        terms = health_terms()
+        is_h = weak["질문"].fillna("").apply(lambda t: any(k in t for k in terms))
+        off = int((~is_h).sum())
+        weak = weak[is_h]
     weak_cols = [c for c in ["질문", "근거수준", "top유사도", "시각"] if c in weak.columns]
     if weak.empty:
-        st.caption("근거 부족·약한 질문이 없습니다. 👍")
+        st.caption(f"건강 질문 중 근거 부족·약한 질문이 없습니다. 👍 (건강과 무관한 일반대화 {off}건 제외)")
     else:
         st.dataframe(weak[weak_cols].sort_values("top유사도"), use_container_width=True, hide_index=True)
+        st.caption(f"건강과 무관한 일반대화 {off}건은 제외했습니다 (근거 없음이 정상 — KB 구멍 아님).")
 
     with st.expander("질문별 RAG 상세 전체 보기"):
         full = [c for c in ["질문", "근거수준", "top유사도", "검색청크", "선택청크", "KB버전", "시각"]
