@@ -196,6 +196,20 @@ def sidebar_history(sessions: list[dict], current_id: str) -> str | None:
     return None
 
 
+def mobile_history(sessions: list[dict], current_id: str) -> str | None:
+    """모바일용 지난 대화 메뉴 — 본문 상단 접이식. (모바일은 사이드바 여는 버튼이 잘 안 보여 대체)
+    데스크톱에선 CSS로 숨긴다(사이드바를 쓰므로). 반환은 sidebar_history와 동일."""
+    with st.container(key="mobile_history"):
+        with st.expander("💬 지난 대화 · 새 대화"):
+            if st.button("＋ 새 대화 시작", key="m_new_chat", type="primary", use_container_width=True):
+                return "new"
+            for s in sessions:
+                if st.button(_session_label(s, s["session_id"] == current_id),
+                             key=f"m_sess_{s['session_id']}", use_container_width=True):
+                    return s["session_id"]
+    return None
+
+
 def quick_questions() -> str | None:
     """추천 질문(문장형)을 입력창 위에 보여주고, 누른 질문을 돌려준다(없으면 None)."""
     st.markdown('<div class="quick-label">이런 질문을 해보세요</div>', unsafe_allow_html=True)

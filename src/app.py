@@ -265,16 +265,9 @@ def render_chat() -> None:
     if st.session_state.get("large_text"):
         ui.apply_large_text()
 
-    # 왼쪽 사이드바: 지난 대화 이어보기 / 새 대화 시작 (히스토리 지속, D45)
-    picked = ui.sidebar_history(database.list_sessions(participant_id), session_id)
-    if picked == "new":
-        picked = _new_session(participant_id)
-        st.session_state.pop("nudge_checked", None)   # 새 대화에도 넛지를 다시 판단(있으면 표시)
-    if picked:
-        for key in ("pending_action", "clarify_pending"):
-            st.session_state.pop(key, None)
-        st.session_state["session_id"] = picked
-        st.rerun()
+    # 지난 대화(D45): 데스크톱=왼쪽 사이드바 / 모바일=본문 상단 접이식(아래). 어느 쪽 클릭이든 처리.
+    sessions = database.list_sessions(participant_id)
+    picked = ui.sidebar_history(sessions, session_id)
 
     today_col, chat_col = st.columns([0.31, 0.69], gap="large")
     with today_col:
@@ -284,6 +277,15 @@ def render_chat() -> None:
     with chat_col:
         with st.container(key="conversation"):
             ui.conversation_top()
+            picked = picked or ui.mobile_history(sessions, session_id)   # 모바일 전용 접이식
+            if picked == "new":
+                picked = _new_session(participant_id)
+                st.session_state.pop("nudge_checked", None)   # 새 대화엔 넛지 다시 판단
+            if picked:
+                for key in ("pending_action", "clarify_pending"):
+                    st.session_state.pop(key, None)
+                st.session_state["session_id"] = picked
+                st.rerun()
             maybe_show_nudge(participant_id, session_id)
             # 화면 상태가 아니라 DB에서 대화를 불러온다 → 새로고침해도 복원된다.
             try:
