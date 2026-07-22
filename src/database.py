@@ -146,6 +146,18 @@ def get_messages(session_id: str) -> list[dict]:
     )
 
 
+def recent_turns(session_id: str, exclude_id: str, limit: int = 4) -> list[dict]:
+    """직전 대화 몇 턴을 [{role, content}]로 돌려준다(LLM 맥락용). 질문·답변만 담고,
+    현재 질문(exclude_id)과 빈 답변은 뺀다. 다중턴 대화 이해에 쓴다."""
+    rows = (get_client().table("messages").select("role, content, message_id")
+            .eq("session_id", session_id)
+            .in_("message_type", ["rag_question", "rag_answer", "free_text", "system_notice"])
+            .order("created_at", desc=True).limit(limit + 3).execute().data)
+    turns = [{"role": r["role"], "content": r["content"]}
+             for r in reversed(rows) if r["content"] and r["message_id"] != exclude_id]
+    return turns[-limit:]
+
+
 def log_event(
     event_type: str,
     participant_id: str | None = None,

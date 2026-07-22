@@ -204,17 +204,21 @@ def render_sources(message: dict, sources: list[dict],
 def run_rag(question: str, participant_id: str, session_id: str, question_message_id: str) -> None:
     """근거를 찾아(스피너) 답변을 실시간으로 흘려보이고(스트리밍), 끝나면 저장한다."""
     try:
+        # 최근 대화(맥락). 짧은 후속 답변("253이야")은 직전 발화를 검색어에 보태 근거를 제대로 찾게 한다.
+        history = database.recent_turns(session_id, question_message_id)
+        prev = next((h["content"] for h in reversed(history) if h["role"] == "user"), "")
+        query = f"{prev} {question}" if prev and not rag.is_health_related(question) else question
         with st.spinner("근거를 찾고 있어요… 📚 당뇨 안내 자료를 확인 중입니다"):
-            r = rag.retrieve(question, session_id, participant_id, question_message_id)
+            r = rag.retrieve(query, session_id, participant_id, question_message_id)
         titles = {d["document_id"]: d["title"] for d in database.list_documents()}
         selected = [{**c, "title": titles.get(c["document_id"], "문서")} for c in r["selected"]]
         # 근거 부족(보류·무관질문 안내 포함)도 answer_stream이 처리한다 → 분기 일원화.
         sysver = database.get_active_system_version_id()
         answer = ui.stream_assistant(rag.answer_stream(
-            question, selected, r["evidence_level"], participant_id, question_message_id, sysver))
+            question, selected, r["evidence_level"], participant_id, question_message_id, sysver, history))
         if not (answer or "").strip():          # 모델이 간헐적으로 빈 응답(0토큰)을 줄 때 → 한 번 재생성
             answer = ui.stream_assistant(rag.answer_stream(
-                question, selected, r["evidence_level"], participant_id, question_message_id, sysver))
+                question, selected, r["evidence_level"], participant_id, question_message_id, sysver, history))
         if not (answer or "").strip():          # 재시도도 비면 빈 말풍선 대신 안내 문구
             answer = "죄송해요, 지금은 답변을 만들지 못했어요. 잠시 후 같은 질문을 다시 한 번 여쭤봐 주세요."
             ui.show_assistant(answer)

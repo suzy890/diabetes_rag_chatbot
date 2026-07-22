@@ -179,8 +179,9 @@ def answer_stream(
     participant_id: str | None,
     question_message_id: str | None,
     system_version_id: str,
+    history: list | None = None,
 ):
-    """선택된 근거로 답변을 스트리밍한다(generator). 근거 부족이면 고정 안내문을 한 번에 낸다.
+    """선택된 근거로 답변을 스트리밍한다(generator). history(최근 대화)를 함께 보내 맥락을 잇는다.
     'detailed thinking off' 프롬프트로 장황한 영어 추론을 억제해 잘림·영어누출을 막는다.
     """
     if level == "insufficient" or not selected:
@@ -189,18 +190,16 @@ def answer_stream(
             return
         # 당뇨와 무관한 질문 → LLM이 친근하게 자연 대화(의료 조언 금지·건강질문 유도, 프롬프트로 제약)
         payload = {"model": config.LLM_MODEL, "temperature": 0.5, "max_tokens": 300,
-                   "messages": [{"role": "system", "content": _prompt("offtopic_system")},
-                                {"role": "user", "content": query_text}]}
+                   "messages": [{"role": "system", "content": _prompt("offtopic_system")}]
+                   + (history or []) + [{"role": "user", "content": query_text}]}
         yield from llm_client.stream(payload, "rag_answer", system_version_id,
                                      participant_id, question_message_id)
         return
     evidence = "\n\n".join(
         f"[근거{i}] (출처: {c.get('title', '문서')} {c.get('page_number', '')}쪽)\n{c['content']}"
         for i, c in enumerate(selected, 1))
-    messages = [
-        {"role": "system", "content": _prompt("rag_answer_system") + "\n\n[근거]\n" + evidence},
-        {"role": "user", "content": query_text},
-    ]
+    messages = ([{"role": "system", "content": _prompt("rag_answer_system") + "\n\n[근거]\n" + evidence}]
+                + (history or []) + [{"role": "user", "content": query_text}])
     payload = {"model": config.LLM_MODEL, "messages": messages,
                "temperature": config.LLM_TEMPERATURE, "max_tokens": 1024}
     yield from llm_client.stream(payload, "rag_answer", system_version_id,
