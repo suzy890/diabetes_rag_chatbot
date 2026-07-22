@@ -212,6 +212,12 @@ def run_rag(question: str, participant_id: str, session_id: str, question_messag
         sysver = database.get_active_system_version_id()
         answer = ui.stream_assistant(rag.answer_stream(
             question, selected, r["evidence_level"], participant_id, question_message_id, sysver))
+        if not (answer or "").strip():          # 모델이 간헐적으로 빈 응답(0토큰)을 줄 때 → 한 번 재생성
+            answer = ui.stream_assistant(rag.answer_stream(
+                question, selected, r["evidence_level"], participant_id, question_message_id, sysver))
+        if not (answer or "").strip():          # 재시도도 비면 빈 말풍선 대신 안내 문구
+            answer = "죄송해요, 지금은 답변을 만들지 못했어요. 잠시 후 같은 질문을 다시 한 번 여쭤봐 주세요."
+            ui.show_assistant(answer)
         msg = database.save_message(session_id, participant_id, "assistant", "rag_answer", answer)
         database.update_retrieval_answer(r["retrieval_id"], msg["message_id"])
         sources = [{"title": c["title"], "page": c.get("page_number")} for c in selected]
