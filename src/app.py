@@ -312,8 +312,7 @@ def render_chat() -> None:
             render_action_options(participant_id, session_id)
             render_clarification_options(participant_id, session_id)
 
-            # 대기 중인 답변은 대화 영역 안(=입력창 위)에서 스트리밍한다. 입력창을 컨테이너 밖
-            # 최상위에 둬 하단 고정하므로, 새 질문·답변이 항상 입력창 위로 쌓인다.
+            # 대기 중인 답변은 여기(입력창 위)에서 스트리밍한다 → 새 질문·답변이 입력창 위로 쌓인다.
             answer = st.session_state.pop("pending_answer", None)
             if answer:
                 run_rag(answer["q"], participant_id, session_id, answer["qid"])
@@ -327,12 +326,11 @@ def render_chat() -> None:
                     handle_question(picked, participant_id, session_id, source="suggested")
                     st.rerun()
             ui.medical_note()
-
-    # 입력창은 컨테이너 밖(최상위)에 둬야 Streamlit이 화면 하단에 고정한다.
-    typed = st.chat_input("건강에 관해 궁금한 점을 편하게 물어보세요")
-    if typed and typed.strip():
-        handle_question(typed.strip(), participant_id, session_id, source="typed")
-        st.rerun()
+            # 입력창을 대화 컨테이너 안에 둬 대화창과 같은 너비를 갖게 하고, CSS(position:sticky)로 하단 고정한다.
+            typed = st.chat_input("건강에 관해 궁금한 점을 편하게 물어보세요")
+            if typed and typed.strip():
+                handle_question(typed.strip(), participant_id, session_id, source="typed")
+                st.rerun()
 
 
 def handle_question(question: str, participant_id: str, session_id: str,

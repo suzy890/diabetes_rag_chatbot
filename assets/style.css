@@ -157,16 +157,12 @@ html, body, [class*="css"] {
 [class*="st-key-clarify_"] button:hover, [class*="st-key-quick_"] button:hover { background: var(--mint-light); border-color: var(--green); color: var(--green-dark); }
 .nudge-confirm { margin-top: 10px; padding: 10px 13px; border-radius: 11px; background: white; color: var(--green-dark); font-size: 14px; font-weight: 700; }
 .quick-label { margin: 16px 0 7px; color: #77847e; font-size: 13px; }
-[data-testid="stChatInput"] { border: 2px solid #d4e2da; border-radius: 19px; background: #fbfdfc; }
+/* 입력창은 대화 컨테이너 안에 있어 대화창과 같은 너비. sticky로 화면 하단에 고정한다. */
+[data-testid="stChatInput"] { position: sticky; bottom: 10px; z-index: 20;
+  border: 2px solid #d4e2da; border-radius: 19px; background: #fbfdfc; }
 [data-testid="stChatInput"]:focus-within { border-color: var(--green); box-shadow: 0 0 0 4px rgba(77,139,120,.1); }
 [data-testid="stChatInput"] textarea { min-height: 54px; font-size: 16px; }
 [data-testid="stChatInputSubmitButton"] { color: var(--green); }
-/* 하단 고정 입력창을 대화 열(오른쪽) 아래에 맞춘다 — 본문과 같은 최대폭으로 두고,
-   넓은 화면에서는 왼쪽 '오늘' 카드 폭(약 31%)만큼 밀어 대화 영역과 정렬한다. */
-[data-testid="stBottomBlockContainer"] { max-width: 1220px; }
-@media (min-width: 901px) {
-  [data-testid="stBottomBlockContainer"] { padding-left: calc(31% + 2rem) !important; }
-}
 [data-testid="stExpander"] { margin-top: 10px; border-color: #c6ddd1; border-radius: 11px; background: white; }
 .medical-note { margin-top: 8px; text-align: center; color: #8b9691; font-size: 11px; }
 
